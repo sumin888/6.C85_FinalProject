@@ -185,6 +185,26 @@
               <span>$5,000</span>
             </div>
           </div>
+
+          <!-- Size legend -->
+          <div class="size-legend">
+            <span class="legend-label">Properties at Location</span>
+            <div class="size-legend-row">
+              <div class="size-dot-group">
+                <span class="size-dot" style="width:6px;height:6px;"></span>
+                <span class="size-dot-label">1</span>
+              </div>
+              <div class="size-dot-group">
+                <span class="size-dot" style="width:12px;height:12px;"></span>
+                <span class="size-dot-label">5</span>
+              </div>
+              <div class="size-dot-group">
+                <span class="size-dot" style="width:18px;height:18px;"></span>
+                <span class="size-dot-label">20+</span>
+              </div>
+            </div>
+            <span class="size-hint">Larger dots = more units at same address</span>
+          </div>
         </section>
       </div>
 
@@ -528,6 +548,47 @@
     justify-content: space-between;
     font-size: 0.6rem;
     color: #999;
+  }
+
+  /* ── Size legend ──────────────────────────────────────────────────────── */
+  .size-legend {
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .size-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .size-dot-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .size-dot {
+    display: inline-block;
+    border-radius: 50%;
+    background: #c0392b;
+    opacity: 0.75;
+    flex-shrink: 0;
+  }
+
+  .size-dot-label {
+    font-size: 0.65rem;
+    color: #666;
+  }
+
+  .size-hint {
+    font-size: 0.6rem;
+    color: #999;
+    font-style: italic;
   }
 
   /* ── Loading / Error ───────────────────────────────────────────────────── */

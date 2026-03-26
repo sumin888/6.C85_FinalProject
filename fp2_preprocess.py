@@ -59,6 +59,7 @@ MIN_YEAR = 2018
 MIN_PRICE = 50_000
 MAX_PRICE = 5_000_000
 MATCH_RADIUS = 50
+EXCLUDE_HOODS = {"Harbor Islands"}
 
 
 def safe_int(v):
@@ -89,10 +90,21 @@ sales = sales[
     sales["lon"].notna()
 ].copy()
 
-# 3. Estimate rent, assign neighborhood
+# 3. Estimate rent, assign neighborhood via spatial join (not ZIP)
 sales["monthly_rent"] = (sales["price"] / (RENT_RATIO * 12)).round(0).astype(int)
-sales["neighborhood"] = sales["zip"].map(zip_to_hood)
 sales["bedrooms"] = pd.to_numeric(sales["bedrooms"], errors="coerce")
+
+hoods_for_join = gpd.read_file(HOODS_GEO).to_crs(epsg=4326)
+hoods_for_join = hoods_for_join.rename(columns={"blockgr2020_ctr_neighb_name": "name"})
+hoods_for_join = hoods_for_join[~hoods_for_join["name"].isin(EXCLUDE_HOODS)]
+
+sales_geo = gpd.GeoDataFrame(
+    sales, geometry=gpd.points_from_xy(sales["lon"], sales["lat"]), crs="EPSG:4326"
+)
+sales_geo = gpd.sjoin(sales_geo, hoods_for_join[["name", "geometry"]], how="left", predicate="within")
+sales_geo = sales_geo.rename(columns={"name": "neighborhood"})
+sales_geo = sales_geo[sales_geo["neighborhood"].notna()].drop(columns=["index_right", "geometry"])
+sales = pd.DataFrame(sales_geo)
 
 # 4. Aggregate to neighborhood level
 hood_stats = (
@@ -151,6 +163,7 @@ except Exception as e:
 # 6. Write neighborhoods.geojson
 hoods_geo = gpd.read_file(HOODS_GEO).to_crs(epsg=4326)
 hoods_geo = hoods_geo.rename(columns={"blockgr2020_ctr_neighb_name": "name"})
+hoods_geo = hoods_geo[~hoods_geo["name"].isin(EXCLUDE_HOODS)]
 hoods_out = hoods_geo[["name", "geometry"]].merge(hood_stats, on="name", how="left")
 
 features = []

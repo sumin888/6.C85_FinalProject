@@ -40,10 +40,11 @@
   // ── Neighborhood counts (for tooltip) ─────────────────────────────────────
   $: affordableByNeighborhood = (() => {
     const map = {};
-    for (const p of properties ?? []) {
-      if (p.monthly_rent <= maxRent && (!excludeEvicted || !p.had_eviction)) {
-        map[p.neighborhood] = (map[p.neighborhood] ?? 0) + 1;
-      }
+    if (!projection) return map;
+    for (const p of affordableProps) {
+      const [x, y] = projection([p.lng, p.lat]);
+      if (x < -10 || x > width + 10 || y < -10 || y > height + 10) continue;
+      map[p.neighborhood] = (map[p.neighborhood] ?? 0) + 1;
     }
     return map;
   })();
@@ -126,14 +127,30 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, logicalW, logicalH);
 
-    const dotRadius = 2.5 + zoomProgress * 1.5;  // 2.5 at full view, 4 when fully zoomed
-    ctx.globalAlpha = 0.75;
+    const baseRadius = 2.5 + zoomProgress * 1.5;
+
+    // Aggregate overlapping properties at the same pixel location
+    const grid = new Map();
     for (const p of affordableProps) {
       const [x, y] = projection([p.lng, p.lat]);
       if (x < -10 || x > width + 10 || y < -10 || y > height + 10) continue;
-      ctx.fillStyle = dotColorScale(p.monthly_rent);
+      const key = `${Math.round(x)},${Math.round(y)}`;
+      const existing = grid.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.totalRent += p.monthly_rent;
+      } else {
+        grid.set(key, { x, y, count: 1, totalRent: p.monthly_rent });
+      }
+    }
+
+    ctx.globalAlpha = 0.75;
+    for (const dot of grid.values()) {
+      const avgRent = dot.totalRent / dot.count;
+      const r = dot.count === 1 ? baseRadius : baseRadius + Math.min(Math.sqrt(dot.count) * 1.2, 10);
+      ctx.fillStyle = dotColorScale(avgRent);
       ctx.beginPath();
-      ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+      ctx.arc(dot.x, dot.y, r, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1.0;
@@ -207,24 +224,6 @@
         {/each}
       </g>
 
-      <!-- Neighborhood name labels (only show for larger areas) -->
-      <g class="labels" pointer-events="none">
-        {#each geoData.features as feature}
-          {@const centroid = pathGen.centroid(feature)}
-          {#if centroid && !isNaN(centroid[0])}
-            <text
-              x={centroid[0]}
-              y={centroid[1]}
-              class="neighborhood-label"
-              text-anchor="middle"
-              dominant-baseline="middle"
-            >
-              {feature.properties.name}
-            </text>
-          {/if}
-        {/each}
-      </g>
-
     </svg>
 
     <!-- Canvas overlay for property dots -->
@@ -234,6 +233,29 @@
       style="width:{width}px; height:{height}px;"
       aria-hidden="true"
     ></canvas>
+
+    <!-- Labels above dots -->
+    <svg
+      width={width}
+      height={height}
+      class="labels-svg"
+      pointer-events="none"
+    >
+      {#each geoData.features as feature}
+        {@const centroid = pathGen.centroid(feature)}
+        {#if centroid && !isNaN(centroid[0])}
+          <text
+            x={centroid[0]}
+            y={centroid[1]}
+            class="neighborhood-label"
+            text-anchor="middle"
+            dominant-baseline="middle"
+          >
+            {feature.properties.name}
+          </text>
+        {/if}
+      {/each}
+    </svg>
   {/if}
 
   <!-- Tooltip -->
@@ -246,14 +268,14 @@
     >
       <div class="tooltip-name">{fp.name}</div>
       <div class="tooltip-row">
-        <span class="tooltip-key">Affordable here</span>
+        <span class="tooltip-key">Affordable properties</span>
         <span class="tooltip-val accent">{affordableHere.toLocaleString()}</span>
       </div>
       <div class="tooltip-row">
         <span class="tooltip-key">Total sales</span>
         <span class="tooltip-val">{fp.count?.toLocaleString() ?? 'N/A'}</span>
       </div>
-      <div class="tooltip-hint">Click to pin details</div>
+      <div class="tooltip-hint">Dots may overlap at shared addresses. Click to pin details.</div>
     </div>
   {/if}
 
@@ -271,11 +293,11 @@
         <div class="detail-sectiontitle">Affordability at ${maxRent.toLocaleString()}/mo</div>
         <div class="detail-bigstat">
           <span class="bignum accent">{affordableHere.toLocaleString()}</span>
-          <span class="bigdesc">properties within budget</span>
+          <span class="bigdesc">of {sp.count?.toLocaleString() ?? '—'} properties shown</span>
         </div>
         <div class="detail-bigstat">
           <span class="bignum">{sp.count ? ((affordableHere / sp.count) * 100).toFixed(0) : '—'}%</span>
-          <span class="bigdesc">of neighborhood sales</span>
+          <span class="bigdesc">of neighborhood total</span>
         </div>
       </div>
 
@@ -332,6 +354,13 @@
   }
 
   .dots-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+  }
+
+  .labels-svg {
     position: absolute;
     top: 0;
     left: 0;
@@ -424,10 +453,10 @@
   /* ── Detail sidebar ──────────────────────────────────────────────────────── */
   .detail-sidebar {
     position: absolute;
-    top: 12px;
+    bottom: 12px;
     right: 12px;
-    width: 260px;
-    max-height: calc(100% - 24px);
+    width: 280px;
+    max-height: 50vh;
     overflow-y: auto;
     background: rgba(255, 255, 255, 0.97);
     border: 1px solid #ddd;
