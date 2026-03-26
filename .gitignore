@@ -1,5 +1,6 @@
-data/
+/data/
 out/
 .DS_Store
-
+fp2/node_modules
+*.timestamp-*
 fp2_deliverable/node_modules/
