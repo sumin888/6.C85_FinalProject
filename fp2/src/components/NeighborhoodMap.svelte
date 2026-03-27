@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import * as d3 from 'd3';
-  import { dotColorScale, filterProperties } from '../lib/data.js';
+  import { makeDotColorScale, filterProperties } from '../lib/data.js';
 
   // ── Props ──────────────────────────────────────────────────────────────────
   export let geoData;         // GeoJSON FeatureCollection
@@ -31,13 +31,15 @@
 
   // ── Tooltip + selected neighborhood state ─────────────────────────────────
   let tooltip = { visible: false, x: 0, y: 0, feature: null };
-  let selectedNeighborhood = null;  // pinned by click
+  export let selectedNeighborhood = null;  // pinned by click, bound from parent
   let hoveredName = null;
 
   // ── Affordable property sample ─────────────────────────────────────────────
   $: affordableProps = properties ? filterProperties(properties, maxRent, excludeEvicted) : [];
+  $: dotColorScale = makeDotColorScale(maxRent);
 
-  // ── Neighborhood counts (for tooltip) ─────────────────────────────────────
+  // ── Neighborhood counts (for tooltip + parent binding) ─────────────────────
+  export let affordableByNeighborhood = {};
   $: affordableByNeighborhood = (() => {
     const map = {};
     if (!projection) return map;
@@ -90,7 +92,7 @@
   }
 
   // ── Re-draw canvas whenever filter state changes ──────────────────────────
-  $: if (canvasEl && projection && affordableProps && ready) {
+  $: if (canvasEl && projection && affordableProps && dotColorScale && ready) {
     requestAnimationFrame(() => drawDots());
   }
 
@@ -204,12 +206,14 @@
         {#each geoData.features as feature (feature.properties.name)}
           {@const isHovered = hoveredName === feature.properties.name}
           {@const isSelected = selectedNeighborhood?.properties.name === feature.properties.name}
+          {@const isZoomTarget = zoomFeature?.properties.name === feature.properties.name}
+          {@const zoomStroke = isZoomTarget && zoomProgress > 0}
           <path
             d={pathGen(feature)}
             fill="#e8e8e8"
-            opacity={zoomFeature && zoomProgress > 0 && feature.properties.name !== zoomFeature.properties.name ? 1 - zoomProgress * 0.7 : 1}
-            stroke={isSelected ? '#c0392b' : isHovered ? '#666' : '#bbb'}
-            stroke-width={isSelected ? 2 : isHovered ? 1.5 : 0.8}
+            opacity={zoomFeature && zoomProgress > 0 && !isZoomTarget ? 1 - zoomProgress * 0.7 : 1}
+            stroke={zoomStroke ? '#2d8c2d' : isSelected ? '#2d8c2d' : isHovered ? '#666' : '#bbb'}
+            stroke-width={zoomStroke ? 1.5 + zoomProgress * 1.5 : isSelected ? 2 : isHovered ? 1.5 : 0.8}
             class="neighborhood-path"
             class:hovered={isHovered}
             class:selected={isSelected}
@@ -279,61 +283,6 @@
     </div>
   {/if}
 
-  <!-- Detail sidebar (pinned on click) -->
-  {#if selectedNeighborhood}
-    {@const sp = selectedNeighborhood.properties}
-    {@const affordableHere = affordableByNeighborhood[sp.name] ?? 0}
-    <div class="detail-sidebar">
-      <div class="detail-header">
-        <h2>{sp.name}</h2>
-        <button class="close-btn" on:click={closeDetail} aria-label="Close">&times;</button>
-      </div>
-
-      <div class="detail-section">
-        <div class="detail-sectiontitle">Affordability at ${maxRent.toLocaleString()}/mo</div>
-        <div class="detail-bigstat">
-          <span class="bignum accent">{affordableHere.toLocaleString()}</span>
-          <span class="bigdesc">of {sp.count?.toLocaleString() ?? '—'} properties shown</span>
-        </div>
-        <div class="detail-bigstat">
-          <span class="bignum">{sp.count ? ((affordableHere / sp.count) * 100).toFixed(0) : '—'}%</span>
-          <span class="bigdesc">of neighborhood total</span>
-        </div>
-      </div>
-
-      <div class="detail-section">
-        <div class="detail-sectiontitle">Rent Distribution</div>
-        <div class="stat-row"><span>Median</span><span class="sv">${sp.median_rent?.toLocaleString()}/mo</span></div>
-        <div class="stat-row"><span>Average</span><span class="sv">${sp.avg_rent?.toLocaleString()}/mo</span></div>
-        <div class="stat-row"><span>Typical range (25–75%ile)</span><span class="sv">${sp.p25_rent?.toLocaleString()} – ${sp.p75_rent?.toLocaleString()}</span></div>
-        <div class="stat-row"><span>Min – Max</span><span class="sv">${sp.min_rent?.toLocaleString()} – ${sp.max_rent?.toLocaleString()}</span></div>
-      </div>
-
-      <div class="detail-section">
-        <div class="detail-sectiontitle">Housing & Demographics</div>
-        <div class="stat-row">
-          <span>Eviction filings (2020–23)</span>
-          <span class="sv">{sp.total_evictions?.toLocaleString() ?? 'N/A'}</span>
-        </div>
-        <div class="stat-row">
-          <span>Corporate ownership</span>
-          <span class="sv">{sp.avg_corp_own_rate != null ? (sp.avg_corp_own_rate * 100).toFixed(1) + '%' : 'N/A'}</span>
-        </div>
-        <div class="stat-row">
-          <span>Owner-occupied rate</span>
-          <span class="sv">{sp.avg_own_occ_rate != null ? (sp.avg_own_occ_rate * 100).toFixed(1) + '%' : 'N/A'}</span>
-        </div>
-        <div class="stat-row">
-          <span>Renter median HH income</span>
-          <span class="sv">${sp.avg_renter_mhi?.toLocaleString() ?? 'N/A'}</span>
-        </div>
-        <div class="stat-row">
-          <span>Total sales in dataset</span>
-          <span class="sv">{sp.count?.toLocaleString()}</span>
-        </div>
-      </div>
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -375,7 +324,7 @@
 
   .neighborhood-path:focus {
     outline: none;
-    stroke: #c0392b !important;
+    stroke: #2d8c2d !important;
     stroke-width: 2 !important;
   }
 
@@ -439,7 +388,7 @@
   }
 
   .tooltip-val.accent {
-    color: #c0392b;
+    color: #2d8c2d;
   }
 
   .tooltip-hint {
@@ -450,107 +399,4 @@
     font-style: italic;
   }
 
-  /* ── Detail sidebar ──────────────────────────────────────────────────────── */
-  .detail-sidebar {
-    position: absolute;
-    bottom: 12px;
-    right: 12px;
-    width: 280px;
-    max-height: 50vh;
-    overflow-y: auto;
-    background: rgba(255, 255, 255, 0.97);
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    z-index: 20;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-    backdrop-filter: blur(4px);
-  }
-
-  .detail-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 14px 10px;
-    border-bottom: 1px solid #eee;
-    position: sticky;
-    top: 0;
-    background: rgba(255, 255, 255, 0.98);
-    z-index: 1;
-  }
-
-  .detail-header h2 {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #1a1a1a;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: #999;
-    font-size: 1.2rem;
-    cursor: pointer;
-    line-height: 1;
-    padding: 2px 4px;
-    border-radius: 3px;
-    transition: color 0.1s;
-  }
-
-  .close-btn:hover {
-    color: #333;
-  }
-
-  .detail-section {
-    padding: 12px 14px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .detail-sectiontitle {
-    font-size: 0.65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #888;
-    margin-bottom: 4px;
-  }
-
-  .detail-bigstat {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-
-  .bignum {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #1a1a1a;
-    line-height: 1;
-  }
-
-  .bignum.accent {
-    color: #c0392b;
-  }
-
-  .bigdesc {
-    font-size: 0.75rem;
-    color: #666;
-  }
-
-  .stat-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 8px;
-    font-size: 0.75rem;
-    color: #666;
-  }
-
-  .stat-row .sv {
-    font-weight: 600;
-    color: #333;
-    white-space: nowrap;
-  }
 </style>

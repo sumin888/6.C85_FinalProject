@@ -85,18 +85,20 @@ export function buildColorScale(features, metricKey) {
   return { scale, extent };
 }
 
-// ── Dot color scale (rent → color) ────────────────────────────────────────────
-// Fixed domain [200, 10000] matching slider range so dot colors stay stable as
-// the slider moves. Strictly light → dark: pale yellow → deep red.
-export const DOT_RENT_DOMAIN = [200, 5000];
-export const dotColorScale = d3.scaleSequential(
-  d3.interpolate('#ffcccc', '#8b0000')
-).domain(DOT_RENT_DOMAIN).clamp(true);
+// ── Dot color scale (3 discrete ranges relative to slider) ────────────────────
+// [0, budget] = green, [budget, budget+1000] = yellow-green, [budget+1000, budget+2000] = orange-red
+const RANGE_COLORS = ['#2d8c2d', '#b8a929', '#c0392b'];
+
+export function makeDotColorScale(maxRent) {
+  return d3.scaleThreshold()
+    .domain([maxRent, maxRent + 1000])
+    .range(RANGE_COLORS);
+}
 
 // ── Filter helper ─────────────────────────────────────────────────────────────
-// Returns properties at or below maxRent, optionally excluding those with eviction history.
+// Returns properties up to budget+2000, optionally excluding eviction-flagged.
 export function filterProperties(properties, maxRent, excludeEvicted = false) {
   return properties.filter((p) =>
-    p.monthly_rent <= maxRent && (!excludeEvicted || !p.had_eviction)
+    p.monthly_rent <= maxRent + 2000 && (!excludeEvicted || !p.had_eviction)
   );
 }

@@ -13,6 +13,8 @@
   let scrollStep = 0;
   let selectedNeighborhood = null;
   let zoomProgress = 0;  // 0 = full Boston, 1 = fully zoomed
+  let clickedNeighborhood = null;  // GeoJSON feature pinned by clicking map
+  let neighborhoodCounts = {};     // affordable count per neighborhood from map
 
   // ── Scroll-driven state ──────────────────────────────────────────────────
   $: excludeEvicted = scrollStep >= 3;
@@ -177,12 +179,16 @@
           <!-- Rent color legend -->
           <div class="rent-legend">
             <span class="legend-label">Monthly Rent</span>
-            <div class="legend-bar"></div>
-            <div class="legend-ticks">
-              <span>$200</span>
-              <span>$1,500</span>
-              <span>$3,000</span>
-              <span>$5,000</span>
+            <div class="legend-bar-discrete">
+              <div class="legend-swatch" style="background:#2d8c2d;flex:1;">
+                <span>&le; ${maxRent.toLocaleString()}</span>
+              </div>
+              <div class="legend-swatch" style="background:#b8a929;flex:1;">
+                <span>+$1k</span>
+              </div>
+              <div class="legend-swatch" style="background:#c0392b;flex:1;">
+                <span>+$2k</span>
+              </div>
             </div>
           </div>
 
@@ -206,6 +212,41 @@
             <span class="size-hint">Larger dots = more units at same address</span>
           </div>
         </section>
+
+        {#if clickedNeighborhood}
+          {@const sp = clickedNeighborhood.properties}
+          {@const affordableHere = neighborhoodCounts[sp.name] ?? 0}
+          <section class="detail-panel">
+            <div class="detail-header">
+              <h3>{sp.name}</h3>
+              <button class="close-btn" on:click={() => clickedNeighborhood = null}>&times;</button>
+            </div>
+            <div class="detail-section">
+              <div class="detail-sectiontitle">Affordability at ${maxRent.toLocaleString()}/mo</div>
+              <div class="detail-bigstat">
+                <span class="bignum accent">{affordableHere.toLocaleString()}</span>
+                <span class="bigdesc">of {sp.count?.toLocaleString() ?? '—'} shown</span>
+              </div>
+              <div class="detail-bigstat">
+                <span class="bignum">{sp.count ? ((affordableHere / sp.count) * 100).toFixed(0) : '—'}%</span>
+                <span class="bigdesc">of neighborhood total</span>
+              </div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-sectiontitle">Rent Distribution</div>
+              <div class="stat-row"><span>Median</span><span class="sv">${sp.median_rent?.toLocaleString()}/mo</span></div>
+              <div class="stat-row"><span>Average</span><span class="sv">${sp.avg_rent?.toLocaleString()}/mo</span></div>
+              <div class="stat-row"><span>25th–75th %ile</span><span class="sv">${sp.p25_rent?.toLocaleString()} – ${sp.p75_rent?.toLocaleString()}</span></div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-sectiontitle">Housing & Demographics</div>
+              <div class="stat-row"><span>Eviction filings (2020–23)</span><span class="sv">{sp.total_evictions?.toLocaleString() ?? 'N/A'}</span></div>
+              <div class="stat-row"><span>Corporate ownership</span><span class="sv">{sp.avg_corp_own_rate != null ? (sp.avg_corp_own_rate * 100).toFixed(1) + '%' : 'N/A'}</span></div>
+              <div class="stat-row"><span>Owner-occupied rate</span><span class="sv">{sp.avg_own_occ_rate != null ? (sp.avg_own_occ_rate * 100).toFixed(1) + '%' : 'N/A'}</span></div>
+              <div class="stat-row"><span>Renter median income</span><span class="sv">${sp.avg_renter_mhi?.toLocaleString() ?? 'N/A'}</span></div>
+            </div>
+          </section>
+        {/if}
       </div>
 
       <NeighborhoodMap
@@ -215,6 +256,8 @@
         {excludeEvicted}
         {zoomFeature}
         {zoomProgress}
+        bind:selectedNeighborhood={clickedNeighborhood}
+        bind:affordableByNeighborhood={neighborhoodCounts}
       />
     </div>
 
@@ -349,7 +392,7 @@
   }
 
   .step-card :global(strong) {
-    color: #c0392b;
+    color: #2d8c2d;
     font-weight: 600;
   }
 
@@ -389,7 +432,7 @@
   }
 
   .neighborhood-select:focus {
-    border-color: #c0392b;
+    border-color: #2d8c2d;
   }
 
   /* ── Controls overlay (top-right) ────────────────────────────────────────── */
@@ -397,8 +440,18 @@
     position: absolute;
     top: 16px;
     right: 16px;
+    bottom: 16px;
     z-index: 30;
     width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .controls-overlay > :global(*) {
+    pointer-events: auto;
   }
 
   .control-group {
@@ -432,7 +485,7 @@
   .rent-display {
     font-size: 1.6rem;
     font-weight: 700;
-    color: #c0392b;
+    color: #2d8c2d;
     line-height: 1;
   }
 
@@ -451,8 +504,8 @@
     border-radius: 2px;
     background: linear-gradient(
       to right,
-      #c0392b 0%,
-      #c0392b var(--pct, 28.57%),
+      #2d8c2d 0%,
+      #2d8c2d var(--pct, 28.57%),
       #ddd var(--pct, 28.57%)
     );
     outline: none;
@@ -465,17 +518,17 @@
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: #c0392b;
+    background: #2d8c2d;
     border: 2px solid #fff;
     cursor: pointer;
-    box-shadow: 0 0 6px rgba(192, 57, 43, 0.4);
+    box-shadow: 0 0 6px rgba(45, 140, 45, 0.4);
   }
 
   .rent-slider::-moz-range-thumb {
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: #c0392b;
+    background: #2d8c2d;
     border: 2px solid #fff;
     cursor: pointer;
   }
@@ -511,7 +564,7 @@
   }
 
   .stat-value.accent {
-    color: #c0392b;
+    color: #2d8c2d;
   }
 
   .stat-label {
@@ -537,17 +590,24 @@
     color: #666;
   }
 
-  .legend-bar {
-    height: 10px;
+  .legend-bar-discrete {
+    display: flex;
     border-radius: 3px;
-    background: linear-gradient(to right, #ffcccc, #8b0000);
+    overflow: hidden;
+    height: 22px;
   }
 
-  .legend-ticks {
+  .legend-swatch {
     display: flex;
-    justify-content: space-between;
-    font-size: 0.6rem;
-    color: #999;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .legend-swatch span {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
   }
 
   /* ── Size legend ──────────────────────────────────────────────────────── */
@@ -575,7 +635,7 @@
   .size-dot {
     display: inline-block;
     border-radius: 50%;
-    background: #c0392b;
+    background: #2d8c2d;
     opacity: 0.75;
     flex-shrink: 0;
   }
@@ -589,6 +649,104 @@
     font-size: 0.6rem;
     color: #999;
     font-style: italic;
+  }
+
+  /* ── Detail panel (neighborhood click) ─────────────────────────────────── */
+  .detail-panel {
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.10);
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1;
+  }
+
+  .detail-header h3 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 1.2rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+
+  .close-btn:hover {
+    color: #333;
+  }
+
+  .detail-section {
+    padding: 10px 14px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .detail-sectiontitle {
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #888;
+    margin-bottom: 2px;
+  }
+
+  .detail-bigstat {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .bignum {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1;
+  }
+
+  .bignum.accent {
+    color: #2d8c2d;
+  }
+
+  .bigdesc {
+    font-size: 0.7rem;
+    color: #666;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: #666;
+  }
+
+  .stat-row .sv {
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
   }
 
   /* ── Loading / Error ───────────────────────────────────────────────────── */
@@ -607,7 +765,7 @@
     width: 36px;
     height: 36px;
     border: 3px solid #e0e0e0;
-    border-top-color: #c0392b;
+    border-top-color: #2d8c2d;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
