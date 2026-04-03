@@ -187,6 +187,46 @@
   function closeDetail() {
     selectedNeighborhood = null;
   }
+
+  // ── Scale bar computation (derived from actual projection) ─────────────────
+  // Project two real points a known lng offset apart, measure pixel distance
+  // to get true meters-per-pixel at the current zoom level.
+  const BOSTON_CENTER = [-71.0589, 42.3601];
+  const LNG_OFFSET = 0.01; // ~0.01° longitude
+  const niceDistances = [100, 200, 500, 1000, 2000, 5000, 10000];
+
+  function haversineMeters([lon1, lat1], [lon2, lat2]) {
+    const R = 6371000;
+    const toRad = (d) => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  $: scaleBar = (() => {
+    // depend on pathGen so this recomputes when zoom changes
+    void pathGen;
+    if (!projection) return null;
+    const ptA = BOSTON_CENTER;
+    const ptB = [BOSTON_CENTER[0] + LNG_OFFSET, BOSTON_CENTER[1]];
+    const pxA = projection(ptA);
+    const pxB = projection(ptB);
+    if (!pxA || !pxB) return null;
+    const pxDist = Math.sqrt((pxB[0] - pxA[0]) ** 2 + (pxB[1] - pxA[1]) ** 2);
+    const realMeters = haversineMeters(ptA, ptB);
+    const metersPerPx = realMeters / pxDist;
+
+    const maxPx = 120;
+    let dist = niceDistances[0];
+    for (const d of niceDistances) {
+      if (d / metersPerPx <= maxPx) dist = d;
+    }
+    const barPx = dist / metersPerPx;
+    const label = dist >= 1000 ? `${dist / 1000} km` : `${dist} m`;
+    return { barPx, label };
+  })();
 </script>
 
 <!-- ── Container ──────────────────────────────────────────────────────────── -->
@@ -260,6 +300,37 @@
         {/if}
       {/each}
     </svg>
+
+    <!-- Scale bar + North arrow (top layer) -->
+    {#if scaleBar}
+      {@const barY = height - 24}
+      {@const barX = Math.round(width * 0.5 - scaleBar.barPx / 2)}
+      {@const northX = barX + scaleBar.barPx + 20}
+      <svg
+        width={width}
+        height={height}
+        class="scale-bar-svg"
+        pointer-events="none"
+      >
+        <g class="scale-bar-group">
+          <line x1={barX} y1={barY} x2={barX + scaleBar.barPx} y2={barY}
+                stroke="#333" stroke-width="2" />
+          <line x1={barX} y1={barY - 5} x2={barX} y2={barY + 5}
+                stroke="#333" stroke-width="1.5" />
+          <line x1={barX + scaleBar.barPx} y1={barY - 5} x2={barX + scaleBar.barPx} y2={barY + 5}
+                stroke="#333" stroke-width="1.5" />
+          <text x={barX + scaleBar.barPx / 2} y={barY - 8}
+                class="scale-label" text-anchor="middle">
+            {scaleBar.label}
+          </text>
+          <g transform="translate({northX},{barY - 12})">
+            <line x1="0" y1="10" x2="0" y2="-8" stroke="#333" stroke-width="1.5" />
+            <polygon points="0,-12 -4,-6 4,-6" fill="#333" />
+            <text x="0" y="20" class="north-label" text-anchor="middle">N</text>
+          </g>
+        </g>
+      </svg>
+    {/if}
   {/if}
 
   <!-- Tooltip -->
@@ -314,6 +385,14 @@
     top: 0;
     left: 0;
     pointer-events: none;
+  }
+
+  .scale-bar-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 5;
   }
 
   /* ── Neighborhood paths ──────────────────────────────────────────────────── */
@@ -389,6 +468,29 @@
 
   .tooltip-val.accent {
     color: #2d8c2d;
+  }
+
+  /* ── Scale bar + North arrow ──────────────────────────────────────────────── */
+  .scale-bar-group {
+    pointer-events: none;
+  }
+
+  .scale-label {
+    font-size: 10px;
+    font-family: 'Inter', system-ui, sans-serif;
+    fill: #333;
+    font-weight: 600;
+    paint-order: stroke fill;
+    stroke: rgba(255, 255, 255, 0.85);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+
+  .north-label {
+    font-size: 10px;
+    font-family: 'Inter', system-ui, sans-serif;
+    fill: #333;
+    font-weight: 700;
   }
 
   .tooltip-hint {
