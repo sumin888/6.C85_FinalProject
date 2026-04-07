@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FP2 Writeup — Boston Housing Affordability</title>
+  <style>
+    body {
+      font-family: 'Georgia', serif;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px;
+      color: #111;
+      line-height: 1.75;
+    }
+    h1 { font-size: 2rem; margin-bottom: 0.25em; }
+    h2 { font-size: 1.4rem; margin-top: 2.5em; border-bottom: 2px solid #ccc; padding-bottom: 6px; }
+    h3 { font-size: 1.1rem; margin-top: 1.8em; color: #333; }
+    p { margin: 0.75em 0; }
+    ul { margin: 0.5em 0 0.5em 1.5em; }
+    li { margin-bottom: 0.4em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+    th { background: #f4f4f4; }
+    .subtitle { color: #555; font-size: 1rem; margin-bottom: 2em; }
+    .team { font-style: italic; color: #555; }
+  </style>
+</head>
+<body>
+
+<h1>FP2 Writeup: Who Can Afford to Live Here?</h1>
+<p class="subtitle">Boston Housing Affordability — Interactive Visualization<br>
+<span class="team">Alex Tung, Nuri Hong, Sumin Byun</span></p>
+
+<!-- ============================================================ -->
+<h2>1. Design Rationale &amp; Critique</h2>
+
+<h3>Processing Pipeline</h3>
+<p>Load the ZIP-to-neighborhood lookup, mapping 35 ZIP codes to 20 neighborhoods to assign each property sale to a neighborhood.</p>
+<p><strong>Load and Filter Sales Data.</strong> We imported the MAPC residential sales CSV, retaining properties within 35 Boston ZIP codes, sales from 2018 onward, prices between $50,000 and $5,000,000, and valid map coordinates. After filtering, 32,695 sales remained.</p>
+<p><strong>Rent Estimation.</strong> Monthly rent is estimated by dividing sale price by 240 (price-to-rent ratio of 20: <code>sale_price / (20 × 12)</code>). Estimated rents range from $208 to $20,833, with a median of $2,958. Actual rents vary based on lease terms, unit count, and condition.</p>
+<p>For each of 20 neighborhoods with sales, compute the mean, median, min, max, 25th, and 75th percentile rent, and total sales.</p>
+<p><strong>Eviction and Ownership Enrichment.</strong> We loaded tract-level eviction counts (2020–2023), corporate ownership rates, owner-occupancy rates, and renter median household income. These were merged with Census tract geometries by GEOID, then spatially joined to Boston neighborhood polygons using a geometric intersection predicate (a tract is assigned to whichever neighborhood polygon it overlaps). Results were aggregated by summing evictions and averaging rates. Each neighborhood gains total evictions, average corporate ownership rate (<code>avg_corp_own_rate</code>), average owner-occupancy rate (<code>avg_own_occ_rate</code>), and average renter median household income (<code>avg_renter_mhi</code>).</p>
+<p>Combine neighborhood polygons with aggregated statistics to create a GeoJSON FeatureCollection. Each feature includes geometry and the computed properties.</p>
+<p><strong>Per-Property Eviction Flagging.</strong> To identify properties near eviction filings, we loaded the Massachusetts Trial Court eviction CSV (52,146 cases statewide) and filtered to Boston ZIP codes, yielding 6,484 filings with valid coordinates. These filings break down by case type: roughly 65% non-payment of rent, 17% no cause, 16% cause, and 1.5% foreclosure. We deduplicated locations by rounding coordinates to 5 decimal places (approximately 1 meter), yielding 3,927 unique addresses. We then projected both property and eviction coordinates from WGS84 (EPSG:4326) to UTM Zone 19N (EPSG:32619) to enable distance calculations in meters. Using a KD-tree (<code>scipy.spatial.cKDTree</code>), we queried each property's nearest eviction location and flagged those within 50 meters, setting the <code>had_eviction</code> field to <code>true</code>. This flagged 8,734 properties (26.7%). The 50-meter threshold balances geocoding imprecision and spatial relevance, roughly equivalent to one city block.</p>
+<p>Export each property as a JSON record with location, estimated rent, neighborhood, bedrooms, property type, usage, sale price, and eviction flag.</p>
+
+<h3>Output Files</h3>
+<ul>
+  <li><strong>properties.json</strong> — 32,695 records, each with lat, lng, estimated rent, neighborhood, bedrooms, property type code, usage, sale price, and an eviction flag for filings within 50 meters (2020–2024).</li>
+  <li><strong>neighborhoods.geojson</strong> — 24 features with properties: name, average rent, median rent, min rent, max rent, 25th and 75th percentile rents, sales count, total evictions (2020–2023), average corporate ownership, owner-occupancy, and renter median income.</li>
+</ul>
+
+<h3>Assumptions and Limitations</h3>
+<ul>
+  <li>Rent estimation uses a fixed price-to-rent ratio of 20. Actual rents may vary significantly for multi-family properties, condos, or in rapidly changing markets.</li>
+  <li>The eviction proximity threshold is 50 meters. A property is flagged if any eviction filing occurred within this range, not necessarily at the exact address. This may over-count in dense areas where adjacent buildings fall within range.</li>
+  <li>Sales cover 2018 to 2023, while eviction filings span 2020 to 2024. A property sold in 2018 may be flagged for an eviction occurring years later.</li>
+</ul>
+
+<h3>Scroll-Driven Narrative and Eviction Storytelling</h3>
+<p>A scroll story lets us control the pacing of information revelation. Introduce the dataset, build context about evictions, zoom in, then reveal the filter. This mirrors how a reader would naturally process the argument: "here's housing" → "here's the problem" → "here's what's left." Scroll seemed the most natural interaction on desktop.</p>
+<p>The intended audience is Boston residents, prospective renters, and housing policy researchers. The scroll story format lowers the barrier to entry — no instructions needed, just scroll. The slider personalizes the experience to each user's budget. The eviction reveal mechanic is designed to create an emotional response: seeing dots disappear makes the abstract concept of "housing instability" tangible and personal, especially when zoomed into the user's own neighborhood.</p>
+<p>Alternatives considered: A button-based stepper (click "Next" to advance), which we rejected because it breaks the flow aesthetically. Also considered a pure free-exploration mode (no narrative), but the eviction reveal loses its impact without the buildup.</p>
+<p><em>Critique:</em> The IntersectionObserver threshold (50% visibility) can feel imprecise. The step sometimes changes before or after the user expects. The scroll-driven zoom is tied to the position of the step-2 card, which means fast scrollers might miss the animation entirely.</p>
+
+<h3>Rent Slider (Continuous Input, $200–$10,000)</h3>
+<p>The slider is the primary affordability control — it lets users set their personal budget and immediately see where they could live. The $50 step size gives fine-grained control without overwhelming. The slider track fills with green from the left to provide a visual sense of "how much of the range am I using."</p>
+<p><em>Critique:</em> The slider works well for exploration but has no way to input an exact value (e.g., type "$2,750"). Users who know their budget precisely must drag to approximate it. A combined slider + text input would help.</p>
+
+<h3>Neighborhood Dropdown Selector (Step 0 Card)</h3>
+<p>Placing the dropdown in the first narrative card keeps it in the story flow. The user reads the intro, picks their neighborhood, then scrolls. Alphabetical sorting makes it easy to find a known neighborhood.</p>
+<p>Alternatives considered: Clicking directly on the map to select the zoom target. We kept the click interaction for the detail panel instead, since the dropdown is more discoverable and doesn't conflict with the hover tooltip.</p>
+<p><em>Critique:</em> 23 options in a dropdown is manageable but not ideal. A searchable autocomplete or a clickable mini-map would be more engaging. Users unfamiliar with Boston neighborhood names have no guidance on which to pick.</p>
+
+<h3>Hover Tooltip (Follow Cursor, Constrained to Viewport)</h3>
+<p>Tooltips provide detail-on-demand without cluttering the map. Showing affordable count and total sales gives immediate context for each neighborhood. The "dots may overlap" hint manages expectations about the visual count mismatch.</p>
+<p><em>Critique:</em> The tooltip only shows neighborhood-level aggregates, not individual property details. Users who want to know about a specific dot (what's the rent? how many bedrooms?) have no way to access that information. But this may be overwhelming anyway.</p>
+
+<h3>Click-to-Pin Detail Panel (Right-Side Overlay)</h3>
+<p>Clicking a neighborhood pins a persistent detail panel with full statistics: rent distribution, eviction counts, ownership rates. This supports deeper exploration without requiring the user to hold their cursor still.</p>
+<p><em>Critique:</em> The panel competes for right-side space with the controls overlay. On narrow screens it can feel cramped. The panel shows pre-computed GeoJSON statistics (median rent, percentiles) that don't update with the slider, which can confuse users who expect consistency between the slider-filtered dot count and the static rent distribution stats.</p>
+<p>This website is only recommended to be used on a web browser on a laptop/computer, not a phone screen.</p>
+
+<h3>Geographical Position (lat/lng to Screen Coordinates)</h3>
+<p>Geographic position is the most natural encoding for housing data. Users think about where they can afford to live, not abstract statistical summaries. Projection preserves local shapes well at Boston's scale.</p>
+<p><em>Critique:</em> At full zoom-out, dense neighborhoods like Back Bay and Downtown become cluttered. The dot aggregation (larger circles for overlapping properties) helps, but small neighborhoods still visually underrepresent their property count. This is why we implemented the zooming-in interaction as users choose which neighborhood to focus on.</p>
+
+<h3>Color Scheme Based on Rent Price (3-Class Discrete Scale Relative to Slider)</h3>
+<p>We chose a discrete threshold scale with three ranges rather than a continuous gradient: green (at/below budget), yellow-green (+$1k over), red (+$2k over). This makes the budget boundary immediately legible: green means "you can afford this," yellow means "stretch," red means "out of reach." The scale shifts with the slider so the meaning stays anchored to the user's budget.</p>
+<p>The green/yellow/red color scheme leverages universal "go/caution/stop" associations, making affordability status immediately intuitive even without reading the legend.</p>
+<p>Alternatives considered: A continuous sequential green gradient (light to dark by rent). We opted to change this so that users could quickly distinguish "affordable" from "slightly too expensive." A diverging scale centered on the budget was also considered but added visual complexity without helping the core question of "can I afford this."</p>
+
+<h3>Size (Dot Radius Scaled by Property Count at Location)</h3>
+<p>Many properties in Boston share geocoded coordinates (e.g., 60 condos in one building). Without aggregation, these render as a single small dot, creating a severe visual undercount. Square-root scaling of radius maps count to circle area proportionally.</p>
+<p><em>Critique:</em> The legend shows 1, 5, and 20+ as reference sizes, but users might still struggle to estimate exact counts from circle area — a known perceptual limitation. A numeric label on hover for individual dot clusters might improve this.</p>
+
+<h3>Titles, Labels, and Annotations</h3>
+<p>Each of the four scroll steps has a titled narrative card that contextualizes the data before the reader interacts with it. The titles progress deliberately: <em>"Boston's Housing Market"</em> shows the dataset and scope; <em>"The Eviction Shadow"</em> introduces the instability layer with a concrete statistic — <em>"26.7% of all properties on this map had at least one eviction filed at or near their address in the past five years"</em>; <em>"Zooming In"</em> personalizes the story to the reader's chosen neighborhood, surfacing its specific median rent and eviction count; and <em>"What's Really Available"</em> delivers the culminating message after the eviction reveal filter is applied. The controls panel carries a live annotation showing the count and percentage of affordable properties that update in real time as the slider moves, giving the reader immediate quantitative feedback. The rent legend labels update dynamically with the slider value (e.g., "≤ $3,000 / +$1k / +$2k") so the color meaning is always anchored to the current budget. Data sources are cited inline in the final scroll step: MAPC Regional Residential Sales (2000–2023), MA Trial Court Eviction Filing Records (2020–2024), and Boston Neighborhood boundaries via BPDA.</p>
+<p><em>Critique:</em> The neighborhood detail panel labels (median rent, corporate ownership rate, renter MHI) are shown as raw numbers without contextual benchmarks. A reader might not know if 18% corporate ownership is high or low without a citywide average for comparison. A future version could add a citywide average marker next to each stat for reference.</p>
+
+<!-- ============================================================ -->
+<h2>2. Development Process Overview</h2>
+
+<p>Our team divided the work across three members in a sequential pipeline that built on each person's contributions.</p>
+
+<p><strong>Sumin</strong> set up the GitHub repository and wrote the data preprocessing pipeline in <code>fp2_preprocess.py</code>, which took around 6 hours. The pipeline loads and filters 32,695 MAPC residential sales (2018–2023, $50K–$5M), assigns each property to a neighborhood via spatial join against BPDA boundaries, estimates monthly rent using a price-to-rent ratio of 20, enriches neighborhood polygons with census-tract eviction counts, corporate ownership rate, and renter median income, and flags properties near eviction court filings using a KD-tree (<code>cKDTree</code>). This produces <code>neighborhoods.geojson</code> (24 features with aggregated stats) and <code>properties.json</code> (32,695 records with lat/lng, estimated rent, and eviction flag). She also built the D3 data layer, which took about 4 hours, including <code>loadNeighborhoodGeo()</code> with a polygon ring-winding fix for D3 compatibility, color scale factories for the choropleth and dot layers, and the <code>filterProperties()</code> helper, with the help of Claude. She wrote the development process overview and opportunities to improve section of this writeup, reflecting on how the team collaborated, where time was spent, and what we would change for future milestones, which took 2 hours. She also wrote the final project plan, scoping out the full pipeline and defining the deliverables (~4 hours).</p>
+
+<p><strong>Alex</strong> began further data preprocessing, focusing on the ZIP code-level data. He cleaned and filtered the MAPC residential sales transactions, set up the ZIP-to-neighborhood mapping for Boston's 35 ZIP codes, and prepared the census-tract-level eviction and ownership data for spatial joining. This gave us the foundation of which properties belonged to which neighborhoods and what aggregate statistics each neighborhood carried. Data processing took about 12 hours to extract and clean up the data. Alex then implemented the color scheme for the data points on the map, iterating through several visual approaches before landing on the final design. He implemented a discrete colormap that creates clear visual separation between affordability tiers, with three budget-relative ranges whose color meanings and labels update in real time with the slider position. This took about 6 hours to implement and polish. Alex also wrote the narrative blurbs for each scroll step, crafting the data source citations, and refining the text to clearly explain the methodology behind the eviction proximity matching and the rent estimation approach. Narrative writing and source citations took another hour.</p>
+
+<p><strong>Nuri</strong> took the preprocessed data and extended it by resolving street addresses to latitude/longitude coordinates, enabling placement of each of the 32,695 properties on the map as individual points. She built the spatial join that replaced the ZIP-based neighborhood assignment with a point-in-polygon approach using the actual BPDA neighborhood boundaries, fixing a 16.5% misassignment rate in the original ZIP method. She also constructed the per-property eviction flag by matching geocoded court filings to property locations within 50 meters using a KD-tree. Spatial joining and validation took around 6 hours. Nuri implemented the sticky map with scrollable narrative cards, the rent slider with dynamic filtering, the neighborhood dropdown with scroll-driven zoom animation, and dot aggregation for overlapping properties — with the help of Claude for the smooth scroll transition and eviction reveal mechanic. She also added the tooltip and click-to-pin detail panel. The front-end scroll story implementation took around 15 hours, with the scroll-driven zoom and dot aggregation being the most technically involved pieces. Nuri also wrote the design rationale and critique portion of the writeup, documenting each visual encoding, the alternatives considered, and an honest assessment of what works and what falls short (~2 hours).</p>
+
+<p><strong>Bottlenecks:</strong> The spatial join and geocoding step (Nuri) was the most time-intensive and created a sequential dependency — the front-end could not be finalized until the corrected neighborhood assignments were ready. The scroll-driven zoom animation was the most technically challenging front-end piece. On the data side, building the eviction proximity KD-tree required careful coordinate projection handling to avoid silent distance errors.</p>
+
+<h3>Opportunities to Improve</h3>
+<ul>
+  <li><strong>Dot density vs. count mismatch:</strong> Despite aggregation and the tooltip hint, there could still be confusion when the tooltip says "179 affordable" but they count ~20 visible circles. The perceptual gap between aggregated circles and raw counts is hard to bridge with static legends alone. A future improvement could add count labels directly on large aggregated dots.</li>
+  <li><strong>Small neighborhoods:</strong> Longwood (19 properties) and West End have very few data points after spatial reassignment. When zoomed in, these neighborhoods look nearly empty, which may mislead users into thinking housing doesn't exist there. But the sales dataset simply has fewer transactions in those areas.</li>
+  <li><strong>Eviction proximity threshold:</strong> The 50-meter spatial match is a blunt instrument. Dense urban areas flag adjacent buildings that may have nothing in common. A future version could use address-level matching (street + number) instead of coordinate proximity, or let users adjust the threshold.</li>
+  <li><strong>No individual property detail:</strong> Users can see dots but can't click on them to learn about specific properties (rent, bedrooms, property type). Adding a canvas hit-test or nearest-neighbor lookup on click would unlock property-level exploration.</li>
+  <li><strong>Add landmarks and rail lines:</strong> Adding MBTA lines and major landmarks on the map would help readers orient themselves relative to known locations, improving interpretability of the dot patterns.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2>3. Final Project Plan</h2>
+
+<h3>Pivot After FP2 Office Hours Check-In</h3>
+<p>Following our check-in with our course instructor Ashley, we decided to significantly reframe our project direction. Our FP2 visualization, a prospective renter tool showing available properties filtered by budget and eviction proximity, was technically functional but narratively unfocused. Ashley's feedback was that a tighter, single-audience narrative would communicate more effectively than a general-purpose exploration tool. We agreed.</p>
+
+<p>The core issue with the current FP2 direction was that pairing property sales data with eviction proximity created an inconsistent theme: prospective renters tend to think "I'll pay my rent, eviction won't happen to me," making the eviction layer feel like noise and discomfort rather than signal. The two datasets told different stories, and the visualization tried to serve both without fully committing to either.</p>
+
+<p>We are moving to a new direction: a <strong>displacement narrative for existing tenants</strong>. The central claim we want to communicate is: <em>higher investor speculation correlates with higher eviction rates, and this is pushing people out of their homes.</em> Rather than showing a prospective renter what they can afford today, we want to show how the market has changed — what was affordable to a tenant five years ago, and how that same budget now falls short because speculation has driven prices up. The audience is not a prospective renter shopping for an apartment. It is someone who already lives in Boston, may be vulnerable to displacement, and deserves to understand why their situation has become harder.</p>
+
+<p>We will also narrow down our geographic scope. Instead of a city-wide generalized story, we will identify the one or two neighborhoods where investor speculation and eviction pressure are most concentrated, and narrow our analysis there. A specific, well-evidenced story about a real place would be more powerful than a broad pattern across all 24 neighborhoods.</p>
+
+<p>Our revised hypothesis: landlords are motivated to displace existing tenants in order to re-let at higher market rates. Around 60% of Boston eviction filings cite non-payment of rent — consistent with tenants being priced out by rising costs, not violating lease terms. The visualization will make this chain legible: speculation activity → rising rents → eviction filings → displacement. The audience is tenants who are already in that situation, and advocates and policymakers who could act on their behalf.</p>
+
+<p>Per Ashley's guidance, we will first prioritize the clarity of the message and quality of the visual encoding matter more. We will focus on communicating the narrative cleanly rather than adding interaction for its own sake.</p>
+
+<h3>Page Structure and Visualization Plan</h3>
+<p>The final project will be a scroll-driven single-page narrative with five distinct sections, each anchored to a visualization. The overall arc moves from context → evidence → human impact → what can be done.</p>
+
+<ol>
+  <li>
+    <strong>Section 1 — The Investor Takeover (Context)</strong><br>
+    A citywide choropleth map showing corporate ownership rates by census tract, with a time slider animating change from 2004 to 2024. A companion line chart shows corporate ownership rising while owner-occupancy falls citywide. Key callout: <em>"1 in 7 homes sold in Greater Boston goes to an investor."</em> This establishes the scale of the problem before narrowing in.
+  </li>
+  <li>
+    <strong>Section 2 — Where It Hurts Most (Focal Neighborhood)</strong><br>
+    After EDA to identify the most speculator-affected neighborhood (likely East Boston or South Boston based on MAPC data), we zoom in. A tract-level scatter plot shows investor transaction share (x-axis) vs. eviction rate (y-axis), with tracts colored by renter median household income. A small choropleth highlights the focal neighborhood within Boston. Key callout: <em>"Evictions are increasingly correlated with investor activity."</em>
+  </li>
+  <li>
+    <strong>Section 3 — The Displacement Story (Human Impact)</strong><br>
+    A before/after comparison: given a median renter budget in the focal neighborhood 5 years ago, show how many units were within reach then vs. now — visualized as a dot plot or bar chart of available units by year. A secondary annotation layer shows when key investor purchase spikes occurred in the same neighborhood, connecting speculation activity to the shrinking affordable supply. This is the most personal section of the narrative — it shows that real people with unchanged budgets are being pushed out.
+  </li>
+  <li>
+    <strong>Section 4 — Condo Conversion (Rental Housing Disappearing)</strong><br>
+    A stacked bar chart showing condo conversions by neighborhood over time (2016–2024), with 2023's spike (868 conversions, ~4× prior year) highlighted. A companion map shows which neighborhoods saw the most conversions. Key message: rental buildings are being permanently removed from the market, reducing supply and accelerating displacement.
+  </li>
+  <li>
+    <strong>Section 5 — What Can Be Done (Resources)</strong><br>
+    A policy card grid presenting proposed and existing protections relevant to at-risk tenants: Just Cause Eviction, Tenant Right of First Refusal, Condo Conversion Notification, Real Estate Transfer Fee, and Corporate Ownership Transparency. Each card links to further reading. This closes the narrative with action — giving the audience something to do with what they've learned.
+  </li>
+</ol>
+
+<h3>Task Breakdown and Assignments</h3>
+<table>
+  <tr><th>Task</th><th>Assigned to</th><th>Deadline</th></tr>
+  <tr><td>EDA: identify focal neighborhood, validate hypothesis with data</td><td>Sumin + Nuri</td><td>Apr 12</td></tr>
+  <tr><td>Section 1: investor choropleth + time slider + ownership trend line chart</td><td>Nuri</td><td>Apr 17</td></tr>
+  <tr><td>Section 2: eviction vs. investor scatter + focal neighborhood map</td><td>Alex</td><td>Apr 19</td></tr>
+  <tr><td>Section 3: before/after affordability dot plot + annotation layer</td><td>Nuri</td><td>Apr 17</td></tr>
+  <tr><td>Section 4: condo conversion bar chart + neighborhood map</td><td>Sumin</td><td>Apr 19</td></tr>
+  <tr><td>Section 5: policy card grid + resource links</td><td>Alex + Sumin</td><td>Apr 20</td></tr>
+  <tr><td>Scroll narrative text, annotations, citations across all sections</td><td>All</td><td>Apr 21</td></tr>
+  <tr><td>Visual design polish (color palette, typography, layout consistency)</td><td>Alex</td><td>Apr 22</td></tr>
+  <tr><td>Final deploy + QA</td><td>Sumin</td><td>Apr 23</td></tr>
+</table>
+
+<p>Every member of our team is expected to contribute equally to all parts of the project. Implementation tasks are split, but all members are responsible for reviewing and testing each other's components before the final deadline.</p>
+
+<h3>Backup Plan</h3>
+<p>If the before/after affordability comparison (Section 3) cannot be built with sufficient temporal resolution from the sales data, we will replace it with a static annotated rent trajectory chart for the focal neighborhood, showing median estimated rent over time alongside investor purchase spikes. If the eviction-investor scatter (Section 2) shows a weak correlation after EDA, we will substitute eviction rate vs. renter median household income, which is a more data-stable relationship. If the condo conversion data is too sparse at the neighborhood level for a compelling chart, Section 4 will be merged into Section 2 as a supporting annotation. If the time slider in Section 1 proves too technically complex, we will replace it with two static side-by-side choropleth maps (2004 vs. 2024). The non-negotiable deliverables are Sections 1 and 3 — the investor overview and the displacement story — as they carry the core argument. Sections 2, 4, and 5 can be simplified to annotated static figures or text blocks if needed to meet the deadline.</p>
+
+</body>
+</html>
