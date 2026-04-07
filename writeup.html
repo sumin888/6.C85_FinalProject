@@ -28,7 +28,7 @@
 </head>
 <body>
 
-<h1>FP2 Writeup: Who Can Afford to Live Here?</h1>
+<h1>C.85 FP2 Writeup: Who Can Afford to Live Here?</h1>
 <p class="subtitle">Boston Housing Affordability — Interactive Visualization<br>
 <span class="team">Alex Tung, Nuri Hong, Sumin Byun</span><br>
 <b>Deployed Proof of Concept: </b><a href="https://sumin888.github.io/6.C85_FinalProject/docs/" target="_blank">Web Visualization</a></p>
@@ -126,6 +126,7 @@
   <li>Boundaries shift with the slider so the encoded information stays personalized to the user's budget.</li>
 </ul>
 <p>Alternatives considered: A continuous sequential green gradient (light to dark by rent). We opted to change this so that users could quickly distinguish "affordable" from "slightly too expensive." A diverging scale centered on the budget was also considered but added visual complexity without helping the core question of "can I afford this."</p>
+<p><em>Critique:</em> It is hard to reconcile "affordability" encoding with disappearing dots derived from eviction data (e.g., Is it negative if out-of-budget properties disappear due to eviction likelihood?). This discrepancy between metrics was discussed further during our OH check-in, leading to an eventual pivot in overall narrative (see <strong>Final Project Plan</strong> below)</p>
 
 <h3>Size (Dot Radius Scaled by Property Count at Location)</h3>
 <p>Many properties in Boston share geocoded coordinates (e.g., 60 condos in one building). Without aggregation, these render as a single small dot, creating a severe visual undercount. Square-root scaling of radius maps count to circle area proportionally.</p>
@@ -213,6 +214,7 @@
 </ol>
 
 <h3>Task Breakdown and Assignments</h3>
+<p>Every member of our team is expected to contribute equally to all parts of the project. Implementation tasks are split, but all members are responsible for reviewing and testing each other's components before the final deadline.</p>
 <table>
   <tr><th>Task</th><th>Assigned to</th><th>Deadline</th></tr>
   <tr><td>EDA: identify focal neighborhood, validate hypothesis with data</td><td>Sumin + Nuri</td><td>Apr 12</td></tr>
@@ -226,10 +228,14 @@
   <tr><td>Final deploy + QA</td><td>Sumin</td><td>Apr 23</td></tr>
 </table>
 
-<p>Every member of our team is expected to contribute equally to all parts of the project. Implementation tasks are split, but all members are responsible for reviewing and testing each other's components before the final deadline.</p>
-
 <h3>Backup Plan</h3>
-<p>If the before/after affordability comparison (Section 3) cannot be built with sufficient temporal resolution from the sales data, we will replace it with a static annotated rent trajectory chart for the focal neighborhood, showing median estimated rent over time alongside investor purchase spikes. If the eviction-investor scatter (Section 2) shows a weak correlation after EDA, we will substitute eviction rate vs. renter median household income, which is a more data-stable relationship. If the condo conversion data is too sparse at the neighborhood level for a compelling chart, Section 4 will be merged into Section 2 as a supporting annotation. If the time slider in Section 1 proves too technically complex, we will replace it with two static side-by-side choropleth maps (2004 vs. 2024). The non-negotiable deliverables are Sections 1 and 3 — the investor overview and the displacement story — as they carry the core argument. Sections 2, 4, and 5 can be simplified to annotated static figures or text blocks if needed to meet the deadline.</p>
+<ul>
+<li>If the before/after affordability comparison (Section 3) cannot be built with sufficient temporal resolution from the sales data, we will replace it with a static annotated rent trajectory chart for the focal neighborhood, showing median estimated rent over time alongside investor purchase spikes.</li>
+<li>If the eviction-investor scatter (Section 2) shows a weak correlation after EDA, we will substitute eviction rate vs. renter median household income, which is a more data-stable relationship.</li>
+<li>If the condo conversion data is too sparse at the neighborhood level for a compelling chart, Section 4 will be merged into Section 2 as a supporting annotation.</li>
+<li>If the time slider in Section 1 proves too technically complex, we will replace it with two static side-by-side choropleth maps (2004 vs. 2024).</li>
+</ul>
+<p>The non-negotiable deliverables are Sections 1 and 3 — the investor overview and the displacement story — as they carry the core argument. Sections 2, 4, and 5 can be simplified to annotated static figures or text blocks if needed to meet the deadline.</p>
 
 </body>
 </html>
