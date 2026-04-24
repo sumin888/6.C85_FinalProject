@@ -334,17 +334,17 @@
   }
 
   .story-step {
-    min-height: 100vh;
+    min-height: 72vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 40px 24px;
+    padding: 24px 24px;
     scroll-snap-align: start;
   }
 
   .story-step:first-child {
     align-items: flex-start;
-    padding-top: 20px;
+    padding-top: 16px;
   }
 
   .story-card {
