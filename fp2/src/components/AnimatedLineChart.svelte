@@ -59,60 +59,59 @@
 
     for (const line of lines) {
       const lineGen = d3.line().x(d => x(d.x)).y(d => y(d.y)).curve(d3.curveMonotoneX);
+      if (line.data.length === 0) continue;
 
-      // Clip path
-      const clipId = `clip-${Math.random().toString(36).slice(2, 8)}`;
-      svg.append('defs').append('clipPath').attr('id', clipId)
-        .append('rect').attr('x', margin.left).attr('y', 0)
-        .attr('width', clipX).attr('height', height);
+      const sorted = [...line.data].sort((a, b) => a.x - b.x);
+      const xAtEdge = x.invert(clipX);
 
+      // Build a truncated series: every real datapoint whose x ≤ clipX,
+      // plus one interpolated point exactly at (xAtEdge, y_interp). The path
+      // renders this partial series instead of being clipped by a rect — so
+      // its rendered endpoint *is* the dot's position, with no mismatch.
+      const partial = [];
+      for (let i = 0; i < sorted.length; i++) {
+        const d = sorted[i];
+        if (d.x <= xAtEdge) {
+          partial.push(d);
+        } else {
+          const prev = partial.length ? partial[partial.length - 1] : sorted[0];
+          const t = d.x === prev.x ? 0 : (xAtEdge - prev.x) / (d.x - prev.x);
+          partial.push({ x: xAtEdge, y: prev.y + t * (d.y - prev.y) });
+          break;
+        }
+      }
+      if (partial.length === 0) partial.push(sorted[0]);
+      // If clipX lands beyond the last point, extend to the last point explicitly.
+      if (partial[partial.length - 1].x < sorted[sorted.length - 1].x && xAtEdge >= sorted[sorted.length - 1].x) {
+        partial.push(sorted[sorted.length - 1]);
+      }
+
+      // Draw the partial line — ends precisely where we'll place the dot.
       g.append('path')
-        .datum(line.data)
+        .datum(partial)
         .attr('fill', 'none')
         .attr('stroke', line.color)
         .attr('stroke-width', 2.5)
-        .attr('d', lineGen)
-        .attr('clip-path', `url(#${clipId})`);
+        .attr('stroke-linecap', 'round')
+        .attr('stroke-linejoin', 'round')
+        .attr('d', lineGen);
 
-      // Endpoint dot + label: position at the leading edge of the clipped line
-      // by linearly interpolating between the two data points that straddle clipX,
-      // so the dot rides on the line's tip instead of lagging behind it.
-      if (line.data.length > 0) {
-        const sorted = [...line.data].sort((a, b) => a.x - b.x);
-        const xAtEdge = x.invert(clipX);
+      // Dot + label at the exact endpoint of the drawn line
+      const tip = partial[partial.length - 1];
+      const cx = x(tip.x);
+      const cy = y(tip.y);
 
-        let edgePoint = null;
-        if (xAtEdge <= sorted[0].x) {
-          edgePoint = sorted[0];
-        } else if (xAtEdge >= sorted[sorted.length - 1].x) {
-          edgePoint = sorted[sorted.length - 1];
-        } else {
-          for (let i = 1; i < sorted.length; i++) {
-            if (sorted[i].x >= xAtEdge) {
-              const a = sorted[i - 1];
-              const b = sorted[i];
-              const t = (xAtEdge - a.x) / (b.x - a.x);
-              edgePoint = { x: xAtEdge, y: a.y + t * (b.y - a.y), label: b };
-              break;
-            }
-          }
-        }
+      g.append('circle')
+        .attr('cx', cx).attr('cy', cy)
+        .attr('r', 4).attr('fill', line.color);
 
-        if (edgePoint) {
-          const cx = x(edgePoint.x);
-          const cy = y(edgePoint.y);
-          g.append('circle')
-            .attr('cx', cx).attr('cy', cy)
-            .attr('r', 4).attr('fill', line.color);
-
-          // Label reflects the neighboring true datapoint value so it reads cleanly
-          const labelPoint = edgePoint.label ?? edgePoint;
-          g.append('text')
-            .attr('x', cx + 8).attr('y', cy + 4)
-            .attr('fill', line.color).attr('font-size', '11px').attr('font-weight', '600')
-            .text(`${line.label}: ${yFormat(labelPoint.y)}`);
-        }
-      }
+      // Label reflects the nearest passed datapoint so the number stays clean
+      let labelPoint = sorted[0];
+      for (const d of sorted) if (d.x <= xAtEdge) labelPoint = d;
+      g.append('text')
+        .attr('x', cx + 8).attr('y', cy + 4)
+        .attr('fill', line.color).attr('font-size', '11px').attr('font-weight', '600')
+        .text(`${line.label}: ${yFormat(labelPoint.y)}`);
     }
   }
 

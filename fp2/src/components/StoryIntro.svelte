@@ -1,7 +1,8 @@
 <script>
   import { onMount, tick, createEventDispatcher } from 'svelte';
+  import { fade } from 'svelte/transition';
   import AnimatedLineChart from './AnimatedLineChart.svelte';
-  import AnimatedBarChart from './AnimatedBarChart.svelte';
+  import FlowDiagram from './FlowDiagram.svelte';
   import OwnershipVsFilings from './OwnershipVsFilings.svelte';
 
   const dispatch = createEventDispatcher();
@@ -9,9 +10,61 @@
   export let storyData;   // corp_ownership_timeseries.json
   export let zoriData;    // zori_by_neighborhood.json
   export let evictionDots = [];  // eviction case dots, for per-year aggregation
+  export let geoData;     // neighborhoods.geojson (for median income)
 
   let scrollStep = 0;
-  let stepProgresses = [0, 0, 0, 0, 0, 0, 0, 0]; // per-step scroll progress 0–1
+  let stepProgresses = [0, 0, 0, 0, 0, 0, 0]; // per-step scroll progress 0–1
+
+  // ── Sale-flow baseline vs. latest for the flow diagram ─────────────────
+  $: saleFlowDiagram = (() => {
+    const flow = storyData?.citywide?.sale_flow_rates;
+    if (!Array.isArray(flow) || flow.length < 2) return null;
+    const sorted = [...flow].sort((a, b) => a.year - b.year);
+    const baseline = sorted[0];
+    const latest = sorted[sorted.length - 1];
+    return {
+      baselineYear: baseline.year,
+      latestYear: latest.year,
+      baseline: {
+        ind_to_ind: baseline.ind_to_ind, ind_to_corp: baseline.ind_to_corp,
+        corp_to_ind: baseline.corp_to_ind, corp_to_corp: baseline.corp_to_corp,
+      },
+      latest: {
+        ind_to_ind: latest.ind_to_ind, ind_to_corp: latest.ind_to_corp,
+        corp_to_ind: latest.corp_to_ind, corp_to_corp: latest.corp_to_corp,
+      },
+    };
+  })();
+
+  // ── Median renter income per neighborhood (step 3 sub-scroll) ───────────
+  const focusHoods = ['Mission Hill', 'Roxbury', 'Dorchester'];
+  $: focusIncome = (() => {
+    if (!geoData?.features) return [];
+    return focusHoods.map(name => {
+      const f = geoData.features.find(x => x.properties?.name === name);
+      return {
+        name,
+        income: f?.properties?.avg_renter_mhi ?? null,
+      };
+    }).filter(d => d.income != null);
+  })();
+
+  // ── Step-3 sub-scroll: phase + derived progress values ─────────────────
+  // Scroll timeline: rent chart draws from 0 → 0.40, then a pause zone from
+  // 0.40 → 0.60 (both charts sit still so the reader can take a breath),
+  // then the income chart starts drawing from 0.60 → 1.00.
+  const BOSTON_RENTER_MEDIAN = 65000;
+
+  $: priceP = stepProgresses[3] ?? 0;
+  $: pricePhase = priceP >= 0.6 ? 'income' : 'rent';
+  $: rentProgress = Math.min(1, Math.max(0, priceP / 0.40));
+  $: incomeProgress = Math.min(1, Math.max(0, (priceP - 0.60) / 0.40));
+  $: focusIncomeMax = focusIncome.length ? Math.max(...focusIncome.map(d => d.income)) : 1;
+  // Boston-median bar reveals once the user scrolls a little past the start
+  // of the income phase, and completes quickly — the rescale + reveal lands
+  // in a tight window so the bars visibly snap down.
+  $: bostonBarProgress = Math.min(1, Math.max(0, (incomeProgress - 0.25) / 0.15));
+  $: incomeScale = focusIncomeMax + (BOSTON_RENTER_MEDIAN - focusIncomeMax) * bostonBarProgress;
 
   // ── Prepare chart data ─────────────────────────────────────────────────
   $: corpLines = storyData ? [
@@ -53,19 +106,45 @@
   ];
 
   // ZORI rent lines for contrasting neighborhoods
+  // Citywide median rent: average across all neighborhoods per date
+  $: bostonMedianRent = (() => {
+    if (!zoriData) return [];
+    const perDate = new Map();
+    for (const hood in zoriData) {
+      for (const d of zoriData[hood]) {
+        if (!d.date || !d.rent || d.date < '2016-01-01') continue;
+        const b = perDate.get(d.date) || { sum: 0, n: 0 };
+        b.sum += d.rent;
+        b.n += 1;
+        perDate.set(d.date, b);
+      }
+    }
+    return [...perDate.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .filter((_, i) => i % 3 === 0)
+      .map(([date, { sum, n }]) => ({
+        x: new Date(date).getFullYear() + (new Date(date).getMonth() / 12),
+        y: sum / n,
+      }));
+  })();
+
   $: rentLines = zoriData ? [
-    { label: 'Mission Hill', color: '#c0392b', hood: 'Mission Hill' },
-    { label: 'Roxbury', color: '#e67e22', hood: 'Roxbury' },
-    { label: 'Dorchester', color: '#3498db', hood: 'Dorchester' },
-    { label: 'Hyde Park', color: '#2d8c2d', hood: 'Hyde Park' },
-  ].filter(l => zoriData[l.hood]).map(l => ({
-    label: l.label,
-    color: l.color,
-    data: zoriData[l.hood]
-      .filter(d => d.date >= '2016-01-01')
-      .filter((_, i) => i % 3 === 0) // every 3 months to reduce density
-      .map(d => ({ x: new Date(d.date).getFullYear() + (new Date(d.date).getMonth() / 12), y: d.rent })),
-  })) : [];
+    ...[
+      { label: 'Mission Hill', color: '#c0392b', hood: 'Mission Hill' },
+      { label: 'Roxbury', color: '#e67e22', hood: 'Roxbury' },
+      { label: 'Dorchester', color: '#3498db', hood: 'Dorchester' },
+    ].filter(l => zoriData[l.hood]).map(l => ({
+      label: l.label,
+      color: l.color,
+      data: zoriData[l.hood]
+        .filter(d => d.date >= '2016-01-01')
+        .filter((_, i) => i % 3 === 0) // every 3 months to reduce density
+        .map(d => ({ x: new Date(d.date).getFullYear() + (new Date(d.date).getMonth() / 12), y: d.rent })),
+    })),
+    ...(bostonMedianRent.length
+      ? [{ label: 'Boston median', color: '#1a1a1a', data: bostonMedianRent }]
+      : []),
+  ] : [];
 
   // ── Scroll observer ────────────────────────────────────────────────────
   onMount(async () => {
@@ -82,9 +161,17 @@
         const rect = el.getBoundingClientRect();
         if (rect.top < mid && rect.bottom > mid) {
           active = parseInt(el.dataset.step, 10);
-          // Progress: 0 when step top enters viewport center, 1 when step center reaches viewport center
-          // This means animation completes by the time you're centered on the step
-          const rawProgress = (mid - rect.top) / (rect.height * 0.5);
+          const isTall = el.classList.contains('tall');
+          let rawProgress;
+          if (isTall) {
+            // Tall (sticky) step: progress maps the full scroll range from
+            // step-top-at-viewport-top to step-bottom-at-viewport-bottom.
+            const scrolled = -rect.top;
+            const scrollable = rect.height - vh;
+            rawProgress = scrollable > 0 ? scrolled / scrollable : 1;
+          } else {
+            rawProgress = (mid - rect.top) / (rect.height * 0.5);
+          }
           stepProgresses[active] = Math.max(0, Math.min(1, rawProgress));
           stepProgresses = stepProgresses;
           break;
@@ -118,7 +205,7 @@
     </div>
   </div>
 
-  <!-- Step 1: Corporate Takeover -->
+  <!-- Step 1: Boston's Corporate Takeover — ownership trend -->
   <div class="story-scroll-step" data-step="1">
     <div class="story-section" class:active={scrollStep === 1}>
       <div class="story-text">
@@ -126,8 +213,9 @@
         <p>
           Over the past 20 years, corporate entities have steadily acquired
           Boston's rental housing. Corporate ownership has risen from
-          <strong>5.5% in 2004</strong> to <strong>25.3% in 2024</strong> —
-          nearly a 5x increase. Meanwhile, owner-occupancy has declined
+          <strong style="color:#e67e22;">5.5% in 2004</strong> to
+          <strong style="color:#e67e22;">25.3% in 2024</strong> —
+          nearly a 5× increase. Meanwhile, owner-occupancy has declined
           from 43.6% to 38%.
         </p>
         <p class="detail">
@@ -149,103 +237,137 @@
     </div>
   </div>
 
-  <!-- Step 2: Changing Hands -->
+  <!-- Step 2: Who's Buying — Sankey-style flow diagram -->
   <div class="story-scroll-step" data-step="2">
-    <div class="story-section" class:active={scrollStep === 2}>
-      <div class="story-text">
-        <h1>Changing Hands</h1>
-        <p>
-          Individual homeowners are selling to corporate buyers at an
-          accelerating rate. In 2004, only <strong>2%</strong> of property
-          sales went from an individual to an LLC or corporation.
-          By 2019, that reached <strong>12.4%</strong> — a 6x increase.
-        </p>
-        <p class="detail">
-          These aren't families buying homes. They're investment entities
-          acquiring assets — often purchasing from long-time owners who
-          can no longer afford rising costs.
-        </p>
-      </div>
-      <div class="story-chart">
-        <AnimatedLineChart
-          lines={indToCorpLines}
-          progress={scrollStep >= 2 ? Math.max(stepProgresses[2], scrollStep > 2 ? 1 : 0) : 0}
-          yFormat={v => (v * 100).toFixed(1) + '%'}
-          xFormat={v => String(Math.round(v))}
-          yLabel="% of Sales"
-          width={520}
-          height={300}
-        />
-      </div>
-    </div>
-  </div>
-
-  <!-- Step 3: Who's Buying -->
-  <div class="story-scroll-step" data-step="3">
-    <div class="story-section" class:active={scrollStep === 3}>
+    <div class="story-section flow-section" class:active={scrollStep === 2}>
       <div class="story-text">
         <h1>Who's Buying?</h1>
         <p>
-          The composition of buyers has shifted dramatically.
-          Non-investor buyers have dropped from <strong>85%</strong> to
-          <strong>73%</strong> of purchases. Small LLC investors have
-          nearly doubled their share from 8.5% to 15.9%.
+          Every property sale in Boston flows between two types of owners:
+          <strong style="color:#2563eb;">individuals</strong> and
+          <strong style="color:#e67e22;">corporate</strong> entities. Each
+          ribbon starts at a uniform size on the
+          {saleFlowDiagram?.baselineYear ?? '2004'} side and widens or
+          narrows on the {saleFlowDiagram?.latestYear ?? 'latest'} side
+          based on how much that flow actually changed.
         </p>
-        <p class="detail">
-          Institutional investors peaked during the 2008 financial crisis
-          at 15%, swooping in on distressed properties. Small investors —
-          LLCs buying 1-5 properties — now drive the trend.
-        </p>
+        {#if saleFlowDiagram}
+          {@const b = saleFlowDiagram.baseline}
+          {@const n = saleFlowDiagram.latest}
+          <ul class="flow-list">
+            <li>
+              <span class="fl-name" style="color:#e67e22;">Ind → Corp ▲</span>
+              <span class="fl-val">{(b.ind_to_corp * 100).toFixed(1)}% → <strong>{(n.ind_to_corp * 100).toFixed(1)}%</strong></span>
+            </li>
+            <li>
+              <span class="fl-name" style="color:#e67e22;">Corp → Corp ▲</span>
+              <span class="fl-val">{(b.corp_to_corp * 100).toFixed(1)}% → <strong>{(n.corp_to_corp * 100).toFixed(1)}%</strong></span>
+            </li>
+            <li>
+              <span class="fl-name" style="color:#888;">Corp → Ind</span>
+              <span class="fl-val">{(b.corp_to_ind * 100).toFixed(1)}% → <strong>{(n.corp_to_ind * 100).toFixed(1)}%</strong></span>
+            </li>
+            <li>
+              <span class="fl-name" style="color:#2563eb;">Ind → Ind ▼</span>
+              <span class="fl-val">{(b.ind_to_ind * 100).toFixed(1)}% → <strong>{(n.ind_to_ind * 100).toFixed(1)}%</strong></span>
+            </li>
+          </ul>
+        {/if}
       </div>
       <div class="story-chart">
-        <AnimatedBarChart
-          data={investorBarData}
-          categories={investorCategories}
-          progress={scrollStep >= 3 ? Math.max(stepProgresses[3], scrollStep > 3 ? 1 : 0) : 0}
-          yFormat={v => (v * 100).toFixed(0) + '%'}
-          width={520}
-          height={300}
-        />
+        {#if saleFlowDiagram}
+          <FlowDiagram
+            baseline={saleFlowDiagram.baseline}
+            latest={saleFlowDiagram.latest}
+            baselineYear={saleFlowDiagram.baselineYear}
+            latestYear={saleFlowDiagram.latestYear}
+            progress={scrollStep >= 2 ? Math.max(stepProgresses[2], scrollStep > 2 ? 1 : 0) : 0}
+          />
+        {/if}
       </div>
     </div>
   </div>
 
-  <!-- Step 4: The Price You Pay -->
+  <!-- Step 3: The Price You Pay — sub-scroll between rent and income views -->
+  <div class="story-scroll-step tall" data-step="3">
+    <div class="price-sticky">
+      <div class="story-section" class:active={scrollStep === 3}>
+        <div class="story-text">
+          <h1>The Price You Pay</h1>
+          {#if pricePhase === 'rent'}
+            <p>
+              As corporate ownership rises, so do rents. The sharpest climbs
+              cluster in just a few neighborhoods —
+              <strong style="color:#c0392b;">Mission Hill</strong>,
+              <strong style="color:#e67e22;">Roxbury</strong>, and
+              <strong style="color:#3498db;">Dorchester</strong> lead the
+              list.
+            </p>
+            <p class="detail">
+              Keep scrolling ↓ to see what the renters in those same
+              neighborhoods actually earn.
+            </p>
+          {:else}
+            <p>
+              Now the other half of the picture: the median income of
+              renters in the same three neighborhoods. The people absorbing
+              the steepest rent hikes are often the ones with the least
+              room to absorb them.
+            </p>
+            <p class="detail">
+              <em>Falling behind on rent</em> isn't a choice here — it's
+              arithmetic. And it's how most Bostonians end up in housing
+              court.
+            </p>
+          {/if}
+        </div>
+        <div class="story-chart">
+          {#if pricePhase === 'rent'}
+            <div in:fade={{ duration: 380 }} out:fade={{ duration: 220 }}>
+              <AnimatedLineChart
+                lines={rentLines}
+                progress={rentProgress}
+                yFormat={v => '$' + Math.round(v).toLocaleString()}
+                xFormat={v => String(Math.round(v))}
+                yLabel="Monthly Rent"
+                width={520}
+                height={300}
+              />
+            </div>
+          {:else if focusIncome.length}
+            <div in:fade={{ duration: 380, delay: 100 }} out:fade={{ duration: 220 }} class="income-compare">
+              <div class="income-caption">
+                Median renter household income
+              </div>
+              {#each focusIncome as row, i}
+                {@const revealed = incomeProgress >= (i + 0.5) / (focusIncome.length + 1)}
+                {@const color = i === 0 ? '#c0392b' : i === 1 ? '#e67e22' : '#3498db'}
+                <div class="income-row" class:revealed>
+                  <span class="income-name">{row.name}</span>
+                  <div class="income-bar">
+                    <div class="income-fill" style="width:{(row.income / incomeScale) * 100}%; background:{color}"></div>
+                  </div>
+                  <span class="income-val">${row.income.toLocaleString()}/yr</span>
+                </div>
+              {/each}
+              <div class="income-row boston" class:revealed={bostonBarProgress > 0.05}>
+                <span class="income-name boston-name">Boston<br/>median</span>
+                <div class="income-bar">
+                  <div class="income-fill boston-fill"
+                    style="width:{(BOSTON_RENTER_MEDIAN / incomeScale) * bostonBarProgress * 100}%"></div>
+                </div>
+                <span class="income-val">${BOSTON_RENTER_MEDIAN.toLocaleString()}/yr</span>
+              </div>
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: When Rent Outruns Income — Evictions -->
   <div class="story-scroll-step" data-step="4">
-    <div class="story-section" class:active={scrollStep === 4}>
-      <div class="story-text">
-        <h1>The Price You Pay</h1>
-        <p>
-          As corporate ownership rises, so do rents. Since 2016, rents
-          have climbed <strong>20–40%</strong> across Boston — with the
-          steepest increases in neighborhoods seeing the most investor
-          activity.
-        </p>
-        <p class="detail">
-          Mission Hill rents surged 41%. Even traditionally affordable
-          neighborhoods like Hyde Park and Dorchester saw 25–30% increases.
-          When wages don't keep pace, tenants fall behind — and
-          <em>falling behind on rent</em> is how most Bostonians end up
-          in housing court.
-        </p>
-      </div>
-      <div class="story-chart">
-        <AnimatedLineChart
-          lines={rentLines}
-          progress={scrollStep >= 4 ? Math.max(stepProgresses[4], scrollStep > 4 ? 1 : 0) : 0}
-          yFormat={v => '$' + Math.round(v).toLocaleString()}
-          xFormat={v => String(Math.round(v))}
-          yLabel="Monthly Rent"
-          width={520}
-          height={300}
-        />
-      </div>
-    </div>
-  </div>
-
-  <!-- Step 5: When Rent Outruns Income — Evictions -->
-  <div class="story-scroll-step" data-step="5">
-    <div class="story-section eviction-section" class:active={scrollStep === 5}>
+    <div class="story-section eviction-section" class:active={scrollStep === 4}>
       <div class="story-text">
         <h1>When Rent Outruns Income</h1>
         <p>
@@ -279,9 +401,9 @@
     </div>
   </div>
 
-  <!-- Step 6: Who's Really Filing — normalized corp vs individual -->
-  <div class="story-scroll-step" data-step="6">
-    <div class="story-section ovf-section" class:active={scrollStep === 6}>
+  <!-- Step 5: Who's Really Filing — normalized corp vs individual -->
+  <div class="story-scroll-step" data-step="5">
+    <div class="story-section ovf-section" class:active={scrollStep === 5}>
       <div class="story-text">
         <h1>Who's Really Filing?</h1>
         <p>
@@ -301,18 +423,21 @@
       <OwnershipVsFilings
         evictionDots={evictionDots}
         corpOwnership={storyData?.citywide?.corp_ownership ?? []}
-        progress={scrollStep >= 6 ? Math.max(stepProgresses[6], scrollStep > 6 ? 1 : 0) : 0}
+        progress={scrollStep >= 5 ? Math.max(stepProgresses[5], scrollStep > 5 ? 1 : 0) : 0}
       />
     </div>
   </div>
 
-  <!-- Step 7: CTA -->
-  <div class="story-scroll-step" data-step="7">
-    <div class="story-section cta-section" class:active={scrollStep === 7}>
+  <!-- Step 6: CTA -->
+  <div class="story-scroll-step" data-step="6">
+    <div class="story-section cta-section" class:active={scrollStep === 6}>
       <h1>Let's Look Closer</h1>
       <p>
         The next page is about <strong>eviction</strong> — where it's
-        happening, who's filing it, and who's being pushed out.
+        happening, who's filing it, and who's being pushed out. On the
+        map you're about to see, each
+        <span class="dot-inline blue"></span>
+        <strong class="blue-strong">blue dot</strong> is one eviction filing.
       </p>
       <p>
         We'll take you through <strong>6 neighborhoods</strong> — each
@@ -459,6 +584,124 @@
     .hero-title { font-size: 2.1rem; }
     .hero-lede { font-size: 1rem !important; }
   }
+
+  .story-scroll-step.tall {
+    min-height: 200vh;
+    padding: 0;
+    align-items: flex-start;
+  }
+  .price-sticky {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 40px 60px;
+  }
+
+  .income-compare {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 520px;
+    max-width: 100%;
+    padding: 18px 22px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+  }
+  .income-caption {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #888;
+    margin-bottom: 2px;
+  }
+  .income-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 110px;
+    gap: 12px;
+    align-items: center;
+    font-size: 0.88rem;
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  .income-row.revealed { opacity: 1; transform: translateX(0); }
+  .income-name { font-weight: 700; color: #1a1a1a; }
+  .income-bar {
+    height: 20px;
+    background: #f1f1f1;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .income-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.55s ease;
+  }
+  .income-val {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: #555;
+    text-align: right;
+  }
+  .income-row.boston {
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px dashed #ddd;
+  }
+  .boston-name { color: #555 !important; font-size: 0.78rem; line-height: 1.1; }
+  .boston-fill {
+    background: repeating-linear-gradient(
+      45deg,
+      #2d3748,
+      #2d3748 6px,
+      #4a5568 6px,
+      #4a5568 12px
+    );
+  }
+
+  .flow-section .story-text,
+  .flow-section .story-chart {
+    flex: 1 1 0;
+    min-width: 280px;
+  }
+  .flow-section .story-chart { max-width: 640px; }
+
+  .flow-list {
+    list-style: none;
+    padding: 0;
+    margin: 14px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.92rem;
+    max-width: 320px;
+  }
+  .flow-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 14px;
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+  }
+  .flow-list li:last-child { border-bottom: none; }
+  .fl-name {
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .fl-val {
+    color: #666;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.88rem;
+  }
+  .fl-val strong { color: #1a1a1a; font-weight: 800; }
 
   .story-callout {
     display: flex;

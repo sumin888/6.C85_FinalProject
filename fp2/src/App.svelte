@@ -122,6 +122,7 @@
         {storyData}
         {zoriData}
         {evictionDots}
+        {geoData}
         on:enterDeepDive={enterDeepDive}
       />
     {:else}
@@ -182,7 +183,7 @@
           zoomFeature={mapZoomFeature}
           zoomProgress={mapZoomProgress}
           rightReservedPx={mapRightReservedPx}
-          darkColorMode={phase === 'explore'}
+          darkColorMode={phase === 'explore' || phase === 'deepdive'}
           externalPopup={phase === 'explore'}
           userPanZoom={phase === 'explore'}
           resetViewSignal={mapResetViewSignal}

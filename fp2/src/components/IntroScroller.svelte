@@ -418,7 +418,7 @@
     border: 1.5px solid rgba(0,0,0,0.25);
   }
   .legend-swatch.individual { background: #2563eb; }
-  .legend-swatch.corporate { background: #c0392b; }
+  .legend-swatch.corporate { background: #e67e22; }
   .legend-label {
     font-size: 0.82rem;
     color: #333;

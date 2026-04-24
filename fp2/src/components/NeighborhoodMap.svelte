@@ -45,6 +45,17 @@
   let zoomBehavior = null;
   let zoomAttached = false;
 
+  // ── Dot-color mode transition pulse ─────────────────────────────────────
+  // When highlightInvestors flips, briefly dim the canvas so the color
+  // change reads as an intentional animated switch instead of a snap.
+  let _lastHighlightInvestors = highlightInvestors;
+  let dotPulse = false;
+  $: if (highlightInvestors !== _lastHighlightInvestors) {
+    _lastHighlightInvestors = highlightInvestors;
+    dotPulse = true;
+    setTimeout(() => { dotPulse = false; }, 380);
+  }
+
   // ── Tooltip + selected neighborhood state ─────────────────────────────────
   let tooltip = { visible: false, x: 0, y: 0, feature: null };
   export let selectedNeighborhood = null;  // pinned by click, bound from parent
@@ -243,7 +254,13 @@
         } else {
           const corpRatio = dot.corpCount / dot.count;
           if (darkColorMode) {
-            ctx.fillStyle = corpRatio > 0.5 ? '#e67e22' : '#2563eb';
+            // With highlightInvestors off, everything reads as an eviction
+            // case in blue. With it on, split by landlord type.
+            if (highlightInvestors) {
+              ctx.fillStyle = corpRatio > 0.5 ? '#e67e22' : '#2563eb';
+            } else {
+              ctx.fillStyle = '#2563eb';
+            }
           } else if (highlightInvestors && corpRatio > 0.5) {
             ctx.fillStyle = corpColorScale(avgRent);
           } else {
@@ -462,6 +479,7 @@
     <canvas
       bind:this={canvasEl}
       class="dots-canvas clickable"
+      class:pulse={dotPulse}
       style="width:{width}px; height:{height}px;"
       on:click={handleCanvasClick}
     ></canvas>
@@ -621,6 +639,12 @@
   .dots-canvas.clickable {
     pointer-events: auto;
     cursor: crosshair;
+  }
+  .dots-canvas { transition: opacity 0.26s ease; }
+  .dots-canvas.pulse {
+    opacity: 0.25;
+    filter: blur(2px);
+    transition: opacity 0.16s ease, filter 0.16s ease;
   }
 
   .labels-svg {

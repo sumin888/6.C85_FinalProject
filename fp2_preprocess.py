@@ -499,17 +499,34 @@ try:
     all_sales["buyer_llc_ind"] = pd.to_numeric(all_sales["buyer_llc_ind"], errors="coerce").fillna(0)
     all_sales["seller_llc_ind"] = pd.to_numeric(all_sales["seller_llc_ind"], errors="coerce").fillna(0)
 
-    # Ind-to-corp: seller is not LLC, buyer is LLC
+    # Sale-flow directions (by year) between individuals and LLC/corporate entities
     all_sales["ind_to_corp"] = (all_sales["seller_llc_ind"] == 0) & (all_sales["buyer_llc_ind"] == 1)
+    all_sales["corp_to_ind"] = (all_sales["seller_llc_ind"] == 1) & (all_sales["buyer_llc_ind"] == 0)
+    all_sales["ind_to_ind"]  = (all_sales["seller_llc_ind"] == 0) & (all_sales["buyer_llc_ind"] == 0)
+    all_sales["corp_to_corp"] = (all_sales["seller_llc_ind"] == 1) & (all_sales["buyer_llc_ind"] == 1)
 
     by_year = all_sales.groupby("year").agg(
         total=("year", "count"),
-        ind_to_corp=("ind_to_corp", "sum")
+        ind_to_corp=("ind_to_corp", "sum"),
+        corp_to_ind=("corp_to_ind", "sum"),
+        ind_to_ind=("ind_to_ind", "sum"),
+        corp_to_corp=("corp_to_corp", "sum"),
     ).reset_index()
-    by_year["rate"] = (by_year["ind_to_corp"] / by_year["total"]).round(4)
+    for k in ("ind_to_corp", "corp_to_ind", "ind_to_ind", "corp_to_corp"):
+        by_year[f"{k}_rate"] = (by_year[k] / by_year["total"]).round(4)
 
     story_data["citywide"]["ind_to_corp_rate"] = [
-        {"year": int(r["year"]), "rate": float(r["rate"]), "count": int(r["ind_to_corp"])}
+        {"year": int(r["year"]), "rate": float(r["ind_to_corp_rate"]), "count": int(r["ind_to_corp"])}
+        for _, r in by_year.iterrows()
+    ]
+    story_data["citywide"]["sale_flow_rates"] = [
+        {
+            "year": int(r["year"]),
+            "ind_to_corp": float(r["ind_to_corp_rate"]),
+            "corp_to_ind": float(r["corp_to_ind_rate"]),
+            "ind_to_ind":  float(r["ind_to_ind_rate"]),
+            "corp_to_corp": float(r["corp_to_corp_rate"]),
+        }
         for _, r in by_year.iterrows()
     ]
 

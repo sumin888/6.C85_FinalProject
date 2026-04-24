@@ -25,6 +25,11 @@
   export let mapFocusNeighborhood = null;
   export let mapDimOthers = true;
 
+  // Scroll step inside NeighborhoodStory, drives the legend overlay
+  let storyScrollStep = 0;
+  $: legendSplit = storyScrollStep >= 2;
+
+
   $: allNeighborhoods = geoData
     ? geoData.features.map(f => f.properties.name).sort()
     : [];
@@ -46,6 +51,44 @@
 
 <div class="deep-dive">
   <button class="deep-dive-back" on:click={() => dispatch('back')}>&larr; Back to overview</button>
+
+  <!-- Eviction-case legend, pinned bottom-left. Starts as a single
+       "eviction count" row; when the user scrolls to "Who's Filing These?"
+       the corporate-landlord row and size key fade in smoothly. -->
+  <aside class="dot-legend-overlay" class:expanded={legendSplit}>
+    <div class="legend-title">Eviction cases</div>
+
+    <div class="legend-row">
+      <span class="legend-swatch individual"></span>
+      <span class="legend-label">
+        <span class="label-variant" class:active={!legendSplit}>Eviction count</span>
+        <span class="label-variant" class:active={legendSplit}>Individual landlord</span>
+      </span>
+    </div>
+
+    <div class="extra">
+      <div class="legend-row">
+        <span class="legend-swatch corporate"></span>
+        <span class="legend-label">Corporate landlord</span>
+      </div>
+
+      <div class="legend-subtitle">Dot size = cases at location</div>
+      <div class="size-row">
+        <div class="size-cell">
+          <span class="size-swatch" style="width:6px;height:6px;"></span>
+          <span class="size-lbl">1</span>
+        </div>
+        <div class="size-cell">
+          <span class="size-swatch" style="width:10px;height:10px;"></span>
+          <span class="size-lbl">few</span>
+        </div>
+        <div class="size-cell">
+          <span class="size-swatch" style="width:16px;height:16px;"></span>
+          <span class="size-lbl">many</span>
+        </div>
+      </div>
+    </div>
+  </aside>
 
   <div class="deep-dive-panel">
     <NeighborhoodNav />
@@ -80,6 +123,7 @@
       bind:mapUseCurrentRent
       bind:mapHighlightInvestors
       bind:mapHighlightEvictions
+      bind:scrollStep={storyScrollStep}
     />
 
     <div class="explore-cta">
@@ -95,7 +139,120 @@
     position: relative;
     z-index: 10;
     margin-top: -100vh;
+    height: 100vh;
     pointer-events: none;
+  }
+
+  .dot-legend-overlay {
+    pointer-events: auto;
+    position: absolute;
+    bottom: 24px;
+    left: 16px;
+    z-index: 20;
+    width: 240px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.10);
+    font-family: 'Inter', system-ui, sans-serif;
+    transition: width 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  .dot-legend-overlay .extra {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-6px);
+    overflow: hidden;
+    transition:
+      max-height 0.55s cubic-bezier(0.2, 0.9, 0.3, 1),
+      opacity 0.4s ease 0.08s,
+      transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  .dot-legend-overlay.expanded .extra {
+    max-height: 160px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .dot-legend-overlay .label-variant {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .dot-legend-overlay .label-variant.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .dot-legend-overlay .legend-label {
+    position: relative;
+    display: inline-grid;
+  }
+  .dot-legend-overlay .label-variant:not(.active) {
+    grid-area: 1 / 1;
+  }
+  .dot-legend-overlay .label-variant.active {
+    grid-area: 1 / 1;
+  }
+  .dot-legend-overlay .legend-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .dot-legend-overlay .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .dot-legend-overlay .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0, 0, 0, 0.25);
+  }
+  .dot-legend-overlay .legend-swatch.individual { background: #2563eb; }
+  .dot-legend-overlay .legend-swatch.corporate { background: #e67e22; }
+  .dot-legend-overlay .legend-label {
+    font-size: 0.82rem;
+    color: #333;
+  }
+
+  .dot-legend-overlay .legend-subtitle {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #888;
+    margin-top: 10px;
+    margin-bottom: 4px;
+  }
+  .dot-legend-overlay .size-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 2px 0 0;
+  }
+  .dot-legend-overlay .size-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .dot-legend-overlay .size-swatch {
+    display: inline-block;
+    background: #666;
+    border: 1px solid rgba(0, 0, 0, 0.25);
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-legend-overlay .size-lbl {
+    font-size: 0.66rem;
+    color: #777;
   }
 
   .deep-dive-back {

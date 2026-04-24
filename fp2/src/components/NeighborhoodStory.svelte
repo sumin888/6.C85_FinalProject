@@ -19,7 +19,8 @@
   export let mapHighlightInvestors = false;
   export let mapHighlightEvictions = false;
 
-  let scrollStep = 0;
+  // Exposed so the parent can render a contextual legend overlay
+  export let scrollStep = 0;
   let panelEl;
 
   $: story = stories[neighborhood] ?? {};
@@ -158,14 +159,10 @@
     </div>
   </div>
 
-  <!-- Step 1: General eviction — blue dots, overall picture -->
+  <!-- Step 1: General eviction — headline stats + cause breakdown -->
   <div class="story-step" data-step="1">
     <div class="story-card" class:active={scrollStep === 1}>
       <h3>Eviction in {neighborhood}</h3>
-      <p class="lede">
-        Each <span class="inline-dot blue"></span> <strong class="blue-txt">blue dot</strong>
-        on the map is one eviction case filed here, 2020–2024.
-      </p>
       {#if eviction}
         <div class="headline-stat">
           <span class="headline-num red">{eviction.total_filings.toLocaleString()}</span>
