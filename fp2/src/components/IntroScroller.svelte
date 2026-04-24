@@ -23,7 +23,7 @@
   // Explore page should show every eviction case, ignoring year/rent filters.
   $: mapMaxYear = 2024;
   $: mapUseCurrentRent = false;
-  $: mapHighlightInvestors = false;
+  $: mapHighlightInvestors = true;   // split dots into blue (individual) / orange (corp) to match legend
   $: mapHighlightEvictions = false;
   $: maxRent = 99999;
 

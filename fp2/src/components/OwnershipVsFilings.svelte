@@ -111,23 +111,24 @@
       <span class="col-lbl">Filings</span>
       <span class="col-lbl">Ratio</span>
     </div>
-    {#each visibleRows as r}
+    {#each visibleRows as r, i (r.year)}
       {@const ratio = r.corpOwn ? r.corpFile / r.corpOwn : 0}
-      <div class="year-row">
+      {@const delay = i * 90}
+      <div class="year-row" style="--row-delay: {delay}ms">
         <span class="year-lbl">{r.year}</span>
 
         <div class="stacked-mini">
-          <div class="seg orange" style="width:{r.corpOwn * 100}%">
+          <div class="seg orange slide" style="--w: {r.corpOwn * 100}%">
             <span class="pct-inline">{(r.corpOwn * 100).toFixed(0)}%</span>
           </div>
-          <div class="seg blue" style="width:{r.indOwn * 100}%"></div>
+          <div class="seg blue slide" style="--w: {r.indOwn * 100}%; animation-delay: calc(var(--row-delay) + 80ms);"></div>
         </div>
 
         <div class="stacked-mini">
-          <div class="seg orange" style="width:{r.corpFile * 100}%">
+          <div class="seg orange slide" style="--w: {r.corpFile * 100}%; animation-delay: calc(var(--row-delay) + 140ms);">
             <span class="pct-inline">{(r.corpFile * 100).toFixed(0)}%</span>
           </div>
-          <div class="seg blue" style="width:{r.indFile * 100}%"></div>
+          <div class="seg blue slide" style="--w: {r.indFile * 100}%; animation-delay: calc(var(--row-delay) + 200ms);"></div>
         </div>
 
         <span class="ratio-val">{ratio.toFixed(1)}×</span>
@@ -272,7 +273,15 @@
     align-items: center;
     justify-content: flex-start;
     min-width: 0;
-    transition: width 0.4s ease;
+    width: var(--w);
+  }
+  .seg.slide {
+    animation: segSlide 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+    animation-delay: var(--row-delay, 0ms);
+  }
+  @keyframes segSlide {
+    from { width: 0; }
+    to   { width: var(--w); }
   }
   .seg.orange { background: #e67e22; }
   .seg.blue { background: #2563eb; }

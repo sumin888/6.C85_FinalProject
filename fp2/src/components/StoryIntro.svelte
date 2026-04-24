@@ -340,7 +340,7 @@
                 Median renter household income
               </div>
               {#each focusIncome as row, i}
-                {@const revealed = incomeProgress >= (i + 0.5) / (focusIncome.length + 1)}
+                {@const revealed = incomeProgress >= i * 0.05}
                 {@const color = i === 0 ? '#c0392b' : i === 1 ? '#e67e22' : '#3498db'}
                 <div class="income-row" class:revealed>
                   <span class="income-name">{row.name}</span>
