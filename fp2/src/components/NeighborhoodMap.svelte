@@ -195,6 +195,14 @@
     const baseRadius = 1.8 + zoomProgress * 1.1;
     const rentKey = useCurrentRent ? 'rent_now' : 'rent_at_filing';
 
+    // Geographic focus-containment: test each dot against the focused neighborhood's
+    // polygon, not the `neighborhood` column. This way dots that technically belong
+    // to a neighboring neighborhood but sit inside the polygon (and vice versa) are
+    // classified by what the map shows.
+    const focusFeature = (dimOtherNeighborhoods && focusNeighborhood && geoData)
+      ? geoData.features.find(f => f.properties.name === focusNeighborhood)
+      : null;
+
     // Aggregate overlapping dots at same pixel
     const grid = new Map();
     for (const d of filteredDots) {
@@ -202,35 +210,54 @@
       if (x < -10 || x > width + 10 || y < -10 || y > height + 10) continue;
       const key = `${Math.round(x)},${Math.round(y)}`;
       const rent = d[rentKey] ?? 0;
+      const insideFocus = !focusFeature || d3.geoContains(focusFeature, [d.lng, d.lat]);
       const existing = grid.get(key);
       if (existing) {
         existing.count += 1;
         existing.totalRent += rent;
         existing.corpCount += d.corp_landlord ? 1 : 0;
+        existing.insideCount += insideFocus ? 1 : 0;
       } else {
-        grid.set(key, { x, y, count: 1, totalRent: rent, corpCount: d.corp_landlord ? 1 : 0 });
+        grid.set(key, {
+          x, y,
+          count: 1,
+          totalRent: rent,
+          corpCount: d.corp_landlord ? 1 : 0,
+          insideCount: insideFocus ? 1 : 0,
+        });
       }
     }
 
     ctx.globalAlpha = 0.75;
-    for (const dot of grid.values()) {
-      const avgRent = dot.totalRent / dot.count;
-      const r = dot.count === 1 ? baseRadius : baseRadius + Math.min(Math.sqrt(dot.count) * 0.9, 8);
-
-      // Color: corporate landlord = red, individual = green
-      const corpRatio = dot.corpCount / dot.count;
-      if (darkColorMode) {
-        ctx.fillStyle = corpRatio > 0.5 ? '#c0392b' : '#2d8c2d';
-      } else if (highlightInvestors && corpRatio > 0.5) {
-        ctx.fillStyle = corpColorScale(avgRent);
-      } else {
-        ctx.fillStyle = dotColorScale(avgRent);
+    // Two-pass draw: outside-focus dots first (faint gray, low alpha), then
+    // focus-neighborhood dots on top so they read clearly.
+    const drawPass = (onlyOutside) => {
+      for (const dot of grid.values()) {
+        const outside = dot.insideCount === 0;
+        if (onlyOutside !== outside) continue;
+        const avgRent = dot.totalRent / dot.count;
+        const r = dot.count === 1 ? baseRadius : baseRadius + Math.min(Math.sqrt(dot.count) * 0.9, 8);
+        if (outside) {
+          ctx.fillStyle = '#c8c8c8';
+          ctx.globalAlpha = 0.35;
+        } else {
+          const corpRatio = dot.corpCount / dot.count;
+          if (darkColorMode) {
+            ctx.fillStyle = corpRatio > 0.5 ? '#e67e22' : '#2563eb';
+          } else if (highlightInvestors && corpRatio > 0.5) {
+            ctx.fillStyle = corpColorScale(avgRent);
+          } else {
+            ctx.fillStyle = dotColorScale(avgRent);
+          }
+          ctx.globalAlpha = 0.75;
+        }
+        ctx.beginPath();
+        ctx.arc(dot.x, dot.y, r, 0, Math.PI * 2);
+        ctx.fill();
       }
-
-      ctx.beginPath();
-      ctx.arc(dot.x, dot.y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    };
+    drawPass(true);
+    drawPass(false);
     ctx.globalAlpha = 1.0;
 
     // Highlight the clicked dot: stroke directly on its circumference
@@ -336,6 +363,13 @@
     drawDots();
   }
 
+  function fmtMonthYear(s) {
+    if (!s) return '';
+    const d = new Date(s);
+    if (isNaN(d)) return s;
+    return d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  }
+
   // ── Close sidebar ──────────────────────────────────────────────────────────
   function closeDetail() {
     selectedNeighborhood = null;
@@ -406,7 +440,7 @@
             d={pathGen(feature)}
             fill={isDimmed ? '#d8d8d8' : '#e8e8e8'}
             opacity={isDimmed ? 0.3 : (effectiveZoomFeature && zoomProgress > 0 && !isZoomTarget ? 1 - zoomProgress * 0.7 : 1)}
-            stroke={zoomStroke ? '#2d8c2d' : isSelected ? '#2d8c2d' : isHovered ? '#666' : '#bbb'}
+            stroke={zoomStroke ? '#111' : isSelected ? '#111' : isHovered ? '#666' : '#bbb'}
             stroke-width={zoomStroke ? 1.5 + zoomProgress * 1.5 : isSelected ? 2 : isHovered ? 1.5 : 0.8}
             class="neighborhood-path"
             class:hovered={isHovered}
@@ -441,11 +475,14 @@
     >
       {#each geoData.features as feature}
         {@const centroid = pathGen.centroid(feature)}
+        {@const labelDim = dimOtherNeighborhoods && focusNeighborhood
+          && feature.properties.name !== focusNeighborhood}
         {#if centroid && !isNaN(centroid[0])}
           <text
             x={centroid[0]}
             y={centroid[1]}
             class="neighborhood-label"
+            class:dimmed={labelDim}
             text-anchor="middle"
             dominant-baseline="middle"
           >
@@ -517,11 +554,9 @@
         <div class="popup-address">{p.address ?? 'Unknown Address'}{#if p.unit}, Unit {p.unit}{/if}</div>
         <div class="popup-grid">
           <div class="popup-row"><span class="pk">Case type</span><span class="pv">{p.case_type}</span></div>
-          <div class="popup-row"><span class="pk">Filed</span><span class="pv">{p.file_date ?? '—'}</span></div>
-          <div class="popup-row"><span class="pk">Status</span><span class="pv">{p.case_status ?? '—'}</span></div>
+          {#if p.file_date}<div class="popup-row"><span class="pk">Filed</span><span class="pv">{fmtMonthYear(p.file_date)}</span></div>{/if}
           {#if p.dispo}<div class="popup-row"><span class="pk">Outcome</span><span class="pv">{p.dispo}</span></div>{/if}
           <div class="popup-row"><span class="pk">Landlord</span><span class="pv" class:red={p.corp_landlord}>{p.corp_landlord ? 'Corporate' : 'Individual'}</span></div>
-          {#if p.plaintiff}<div class="popup-row"><span class="pk">Filed by</span><span class="pv" style="font-size:0.65rem; white-space:normal;">{p.plaintiff.length > 50 ? p.plaintiff.slice(0, 50) + '...' : p.plaintiff}</span></div>{/if}
           {#if p.rent_at_filing || p.rent_now}
             {@const pctChange = p.rent_at_filing && p.rent_now
               ? Math.round((p.rent_now / p.rent_at_filing - 1) * 100)
@@ -549,7 +584,6 @@
               </div>
             </div>
           {/if}
-          <div class="popup-row"><span class="pk">Neighborhood</span><span class="pv">{p.neighborhood}</span></div>
         </div>
       {/each}
       {#if propertyPopup.props.length > 1}
@@ -612,7 +646,7 @@
 
   .neighborhood-path:focus {
     outline: none;
-    stroke: #2d8c2d !important;
+    stroke: #111 !important;
     stroke-width: 2 !important;
   }
 
@@ -629,6 +663,11 @@
     stroke: rgba(255, 255, 255, 0.8);
     stroke-width: 3px;
     stroke-linejoin: round;
+    transition: fill 0.2s, opacity 0.2s;
+  }
+  .neighborhood-label.dimmed {
+    fill: #b5b5b5;
+    opacity: 0.55;
   }
 
   /* ── Tooltip ─────────────────────────────────────────────────────────────── */

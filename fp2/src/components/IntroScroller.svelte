@@ -417,7 +417,7 @@
     border-radius: 50%;
     border: 1.5px solid rgba(0,0,0,0.25);
   }
-  .legend-swatch.individual { background: #2d8c2d; }
+  .legend-swatch.individual { background: #2563eb; }
   .legend-swatch.corporate { background: #c0392b; }
   .legend-label {
     font-size: 0.82rem;
@@ -484,9 +484,9 @@
     border-radius: 999px;
     font-size: 0.7rem;
     font-weight: 600;
-    background: #e8f5e8;
-    color: #2d8c2d;
-    border: 1px solid #c2ddc2;
+    background: #e6efff;
+    color: #2563eb;
+    border: 1px solid #bdd0f5;
   }
   .pill.corp {
     background: #fde8e6;

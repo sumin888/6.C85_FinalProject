@@ -1,26 +1,29 @@
 <script>
   export let data = null; // eviction data for one neighborhood
 
+  export let showCorpSplit = true;
+
   $: caseTypes = data ? Object.entries(data.case_types || {})
     .sort((a, b) => b[1] - a[1]).slice(0, 4) : [];
   $: totalFilings = data?.total_filings ?? 0;
   $: corpRate = data?.corp_rate ?? 0;
-  $: topPlaintiffs = data?.top_plaintiffs?.slice(0, 3) ?? [];
 </script>
 
 {#if data && totalFilings > 0}
   <div class="eviction-breakdown">
-    <!-- Corp vs Individual bar -->
-    <div class="bar-section">
-      <div class="bar-label">
-        <span>Corporate: <strong>{(corpRate * 100).toFixed(0)}%</strong></span>
-        <span>Individual: <strong>{((1 - corpRate) * 100).toFixed(0)}%</strong></span>
+    {#if showCorpSplit}
+      <!-- Corp vs Individual bar -->
+      <div class="bar-section">
+        <div class="bar-label">
+          <span>Corporate: <strong>{(corpRate * 100).toFixed(0)}%</strong></span>
+          <span>Individual: <strong>{((1 - corpRate) * 100).toFixed(0)}%</strong></span>
+        </div>
+        <div class="stacked-bar">
+          <div class="bar-segment corp" style="width:{corpRate * 100}%"></div>
+          <div class="bar-segment indiv" style="width:{(1 - corpRate) * 100}%"></div>
+        </div>
       </div>
-      <div class="stacked-bar">
-        <div class="bar-segment corp" style="width:{corpRate * 100}%"></div>
-        <div class="bar-segment indiv" style="width:{(1 - corpRate) * 100}%"></div>
-      </div>
-    </div>
+    {/if}
 
     <!-- Case types -->
     <div class="case-types">
@@ -36,18 +39,6 @@
       {/each}
     </div>
 
-    <!-- Top plaintiffs -->
-    {#if topPlaintiffs.length > 0}
-      <div class="top-plaintiffs">
-        <div class="plaintiff-label">Top Corporate Filers</div>
-        {#each topPlaintiffs as ptf}
-          <div class="plaintiff-row">
-            <span class="plaintiff-name">{ptf.name.length > 40 ? ptf.name.slice(0, 40) + '...' : ptf.name}</span>
-            <span class="plaintiff-count">{ptf.count} filings</span>
-          </div>
-        {/each}
-      </div>
-    {/if}
   </div>
 {/if}
 

@@ -120,11 +120,11 @@ export function buildColorScale(features, metricKey) {
   return { scale, extent };
 }
 
-// ── Dot color scale (continuous light → dark green by rent) ──────────────────
+// ── Dot color scale (continuous light → dark blue by rent) ──────────────────
 export function makeDotColorScale(maxRent) {
   return d3.scaleLinear()
     .domain([0, maxRent + 2000])
-    .range(['#b2dfb2', '#1a5e1a'])
+    .range(['#bcd3f2', '#1d3f7a'])
     .clamp(true);
 }
 
@@ -136,11 +136,11 @@ export function makeInvestorColorScale(maxRent) {
     .clamp(true);
 }
 
-// ── Eviction dot color scale (continuous light → dark red by rent) ───────────
+// ── Corporate/investor dot color scale (continuous light → dark orange by rent) ─
 export function makeEvictionColorScale(maxRent) {
   return d3.scaleLinear()
     .domain([0, maxRent + 2000])
-    .range(['#f5b7b1', '#7b241c'])
+    .range(['#fdd9b5', '#a04600'])
     .clamp(true);
 }
 

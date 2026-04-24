@@ -153,11 +153,11 @@
   .rent-slider-value {
     font-size: 0.95rem;
     font-weight: 700;
-    color: #2d8c2d;
+    color: #111;
   }
   .rent-slider input[type="range"] {
     width: 100%;
-    accent-color: #2d8c2d;
+    accent-color: #111;
   }
   .rent-slider-scale {
     display: flex;

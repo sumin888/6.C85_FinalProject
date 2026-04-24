@@ -74,18 +74,44 @@
         .attr('d', lineGen)
         .attr('clip-path', `url(#${clipId})`);
 
-      // Endpoint dot + label at progress position
-      const visibleData = line.data.filter(d => x(d.x) <= clipX);
-      if (visibleData.length > 0) {
-        const last = visibleData[visibleData.length - 1];
-        g.append('circle')
-          .attr('cx', x(last.x)).attr('cy', y(last.y))
-          .attr('r', 4).attr('fill', line.color);
+      // Endpoint dot + label: position at the leading edge of the clipped line
+      // by linearly interpolating between the two data points that straddle clipX,
+      // so the dot rides on the line's tip instead of lagging behind it.
+      if (line.data.length > 0) {
+        const sorted = [...line.data].sort((a, b) => a.x - b.x);
+        const xAtEdge = x.invert(clipX);
 
-        g.append('text')
-          .attr('x', x(last.x) + 8).attr('y', y(last.y) + 4)
-          .attr('fill', line.color).attr('font-size', '11px').attr('font-weight', '600')
-          .text(`${line.label}: ${yFormat(last.y)}`);
+        let edgePoint = null;
+        if (xAtEdge <= sorted[0].x) {
+          edgePoint = sorted[0];
+        } else if (xAtEdge >= sorted[sorted.length - 1].x) {
+          edgePoint = sorted[sorted.length - 1];
+        } else {
+          for (let i = 1; i < sorted.length; i++) {
+            if (sorted[i].x >= xAtEdge) {
+              const a = sorted[i - 1];
+              const b = sorted[i];
+              const t = (xAtEdge - a.x) / (b.x - a.x);
+              edgePoint = { x: xAtEdge, y: a.y + t * (b.y - a.y), label: b };
+              break;
+            }
+          }
+        }
+
+        if (edgePoint) {
+          const cx = x(edgePoint.x);
+          const cy = y(edgePoint.y);
+          g.append('circle')
+            .attr('cx', cx).attr('cy', cy)
+            .attr('r', 4).attr('fill', line.color);
+
+          // Label reflects the neighboring true datapoint value so it reads cleanly
+          const labelPoint = edgePoint.label ?? edgePoint;
+          g.append('text')
+            .attr('x', cx + 8).attr('y', cy + 4)
+            .attr('fill', line.color).attr('font-size', '11px').attr('font-weight', '600')
+            .text(`${line.label}: ${yFormat(labelPoint.y)}`);
+        }
       }
     }
   }

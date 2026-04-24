@@ -75,6 +75,7 @@
     mapDimOthers = true;
     mapZoomFeature = null;
     mapZoomProgress = 0;
+    maxRent = 2000;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -120,6 +121,7 @@
       <StoryIntro
         {storyData}
         {zoriData}
+        {evictionDots}
         on:enterDeepDive={enterDeepDive}
       />
     {:else}

@@ -1,8 +1,8 @@
 import { writable, derived } from 'svelte/store';
 
 export const FEATURED = [
-  'Dorchester', 'Roxbury', 'Mission Hill', 'Beacon Hill',
-  'Chinatown', 'East Boston', 'Hyde Park', 'South End',
+  'Dorchester', 'Roxbury', 'Mission Hill',
+  'East Boston', 'Hyde Park', 'South End',
 ];
 
 export const currentIndex = writable(0);
