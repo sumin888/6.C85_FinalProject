@@ -1,15 +1,26 @@
 <script>
   import { onMount } from 'svelte';
   import * as d3 from 'd3';
-  import { makeDotColorScale, filterProperties } from '../lib/data.js';
+  import { makeDotColorScale, makeEvictionColorScale, filterEvictionDots } from '../lib/data.js';
 
   // ── Props ──────────────────────────────────────────────────────────────────
   export let geoData;         // GeoJSON FeatureCollection
-  export let properties;      // raw property array
+  export let dots = [];       // eviction case array [{lat, lng, neighborhood, rent_at_filing, rent_now, case_type, corp_landlord, ...}]
   export let maxRent;         // number – slider value
-  export let excludeEvicted = false;  // hide properties with eviction history
-  export let zoomFeature = null;      // GeoJSON feature to zoom into, or null
-  export let zoomProgress = 0;        // 0 = full Boston, 1 = fully zoomed (scroll-driven)
+  export let maxYear = 2024;
+  export let useCurrentRent = false;  // use rent_now instead of rent_at_filing
+  export let highlightInvestors = false;  // color corporate landlord dots differently
+  export let highlightEvictions = false;  // not used (all dots are evictions now)
+  export let dimOtherNeighborhoods = false;
+  export let focusNeighborhood = null;
+  export let zoomFeature = null;
+  export let zoomProgress = 0;
+  export let rightReservedPx = 0;  // width of any overlay panel on the right (e.g. deep-dive sidebar)
+  export let darkColorMode = false;  // when true: solid dark green (individual) / dark red (corporate), no rent gradient
+  export let externalPopup = false;  // when true: suppress internal popup and expose clicked dots via selectedDots binding
+  export let selectedDots = [];      // bound out: list of eviction records under the last-clicked cluster
+  export let userPanZoom = false;    // when true: allow user to pan/zoom the map with mouse/trackpad
+  export let resetViewSignal = 0;    // bump this number from the parent to reset the user pan/zoom
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   let svgEl;          // SVG element for neighborhood polygons + axes
@@ -29,24 +40,30 @@
   let baseScale, baseTranslate;
   let zoomedScale, zoomedTranslate;
 
+  // ── User pan/zoom transform (applied on top of the auto projection) ─────
+  let userK = 1, userTx = 0, userTy = 0;
+  let zoomBehavior = null;
+  let zoomAttached = false;
+
   // ── Tooltip + selected neighborhood state ─────────────────────────────────
   let tooltip = { visible: false, x: 0, y: 0, feature: null };
   export let selectedNeighborhood = null;  // pinned by click, bound from parent
   let hoveredName = null;
 
-  // ── Affordable property sample ─────────────────────────────────────────────
-  $: affordableProps = properties ? filterProperties(properties, maxRent, excludeEvicted) : [];
+  // ── Filtered eviction dots ──────────────────────────────────────────────────
+  $: filteredDots = dots ? filterEvictionDots(dots, maxRent, { useCurrentRent, maxYear }) : [];
   $: dotColorScale = makeDotColorScale(maxRent);
+  $: corpColorScale = makeEvictionColorScale(maxRent); // red for corporate landlord
 
   // ── Neighborhood counts (for tooltip + parent binding) ─────────────────────
   export let affordableByNeighborhood = {};
   $: affordableByNeighborhood = (() => {
     const map = {};
     if (!projection) return map;
-    for (const p of affordableProps) {
-      const [x, y] = projection([p.lng, p.lat]);
+    for (const d of filteredDots) {
+      const [x, y] = projection([d.lng, d.lat]);
       if (x < -10 || x > width + 10 || y < -10 || y > height + 10) continue;
-      map[p.neighborhood] = (map[p.neighborhood] ?? 0) + 1;
+      map[d.neighborhood] = (map[d.neighborhood] ?? 0) + 1;
     }
     return map;
   })();
@@ -66,25 +83,41 @@
     ready = true;
   }
 
-  // ── Compute zoomed-in projection target ───────────────────────────────────
-  $: if (ready && zoomFeature && width > 0 && height > 0) {
+  // ── Compute zoomed-in projection target (from zoomFeature or focusNeighborhood) ─
+  $: effectiveZoomFeature = focusNeighborhood && geoData
+    ? geoData.features.find(f => f.properties.name === focusNeighborhood)
+    : zoomFeature;
+
+  $: if (ready && effectiveZoomFeature && width > 0 && height > 0) {
+    // Fit the zoomed feature into the visible area (excluding any reserved right-side panel)
+    const rightPad = Math.max(60, rightReservedPx + 20);
     const tempProj = d3.geoMercator()
-      .fitExtent([[60, 60], [width - 60, height - 60]], zoomFeature);
+      .fitExtent([[60, 60], [width - rightPad, height - 60]], effectiveZoomFeature);
     zoomedScale = tempProj.scale();
     zoomedTranslate = tempProj.translate().slice();
   }
 
+  // When focusNeighborhood is set, force full zoom
+  $: if (focusNeighborhood && effectiveZoomFeature) {
+    zoomProgress = 1;
+  }
+
   // ── Apply scroll-driven zoom by interpolating projection ──────────────────
   $: if (ready && baseScale != null && projection) {
-    const t = (zoomFeature && zoomedScale != null) ? zoomProgress : 0;
+    const t = (effectiveZoomFeature && zoomedScale != null) ? zoomProgress : 0;
     const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 
     const tgtScale = zoomedScale ?? baseScale;
     const tgtTranslate = zoomedTranslate ?? baseTranslate;
 
-    const s = baseScale + (tgtScale - baseScale) * ease;
-    const tx = baseTranslate[0] + (tgtTranslate[0] - baseTranslate[0]) * ease;
-    const ty = baseTranslate[1] + (tgtTranslate[1] - baseTranslate[1]) * ease;
+    const autoS = baseScale + (tgtScale - baseScale) * ease;
+    const autoTx = baseTranslate[0] + (tgtTranslate[0] - baseTranslate[0]) * ease;
+    const autoTy = baseTranslate[1] + (tgtTranslate[1] - baseTranslate[1]) * ease;
+
+    // Layer user pan/zoom on top of the auto projection
+    const s = autoS * userK;
+    const tx = userTx + userK * autoTx;
+    const ty = userTy + userK * autoTy;
 
     projection.scale(s).translate([tx, ty]);
     pathGen = d3.geoPath().projection(projection);
@@ -92,8 +125,38 @@
   }
 
   // ── Re-draw canvas whenever filter state changes ──────────────────────────
-  $: if (canvasEl && projection && affordableProps && dotColorScale && ready) {
+  $: if (canvasEl && projection && filteredDots && dotColorScale && corpColorScale && ready && (highlightInvestors || true)) {
     requestAnimationFrame(() => drawDots());
+  }
+
+  // ── Attach d3.zoom for user pan/zoom ──────────────────────────────────────
+  $: if (canvasEl && userPanZoom && !zoomAttached) {
+    zoomBehavior = d3.zoom()
+      .scaleExtent([0.6, 18])
+      .filter((event) => {
+        // allow wheel, drag, touch — block right-click and double-click panning conflicts
+        return !event.ctrlKey && event.button !== 2;
+      })
+      .on('zoom', (event) => {
+        userK = event.transform.k;
+        userTx = event.transform.x;
+        userTy = event.transform.y;
+      });
+    d3.select(canvasEl).call(zoomBehavior);
+    zoomAttached = true;
+  }
+  $: if (canvasEl && !userPanZoom && zoomAttached) {
+    d3.select(canvasEl).on('.zoom', null);
+    zoomAttached = false;
+    userK = 1; userTx = 0; userTy = 0;
+  }
+  // Reset user transform when the signal changes
+  let _lastResetSignal = 0;
+  $: if (zoomAttached && zoomBehavior && resetViewSignal !== _lastResetSignal) {
+    _lastResetSignal = resetViewSignal;
+    d3.select(canvasEl)
+      .transition().duration(450)
+      .call(zoomBehavior.transform, d3.zoomIdentity);
   }
 
   // ── ResizeObserver ─────────────────────────────────────────────────────────
@@ -111,7 +174,7 @@
     return () => ro.disconnect();
   });
 
-  // ── Draw property dots onto canvas ────────────────────────────────────────
+  // ── Draw eviction dots onto canvas ─────────────────────────────────────────
   function drawDots() {
     if (!canvasEl || !projection) return;
     const ctx = canvasEl.getContext('2d');
@@ -129,33 +192,65 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, logicalW, logicalH);
 
-    const baseRadius = 2.5 + zoomProgress * 1.5;
+    const baseRadius = 1.8 + zoomProgress * 1.1;
+    const rentKey = useCurrentRent ? 'rent_now' : 'rent_at_filing';
 
-    // Aggregate overlapping properties at the same pixel location
+    // Aggregate overlapping dots at same pixel
     const grid = new Map();
-    for (const p of affordableProps) {
-      const [x, y] = projection([p.lng, p.lat]);
+    for (const d of filteredDots) {
+      const [x, y] = projection([d.lng, d.lat]);
       if (x < -10 || x > width + 10 || y < -10 || y > height + 10) continue;
       const key = `${Math.round(x)},${Math.round(y)}`;
+      const rent = d[rentKey] ?? 0;
       const existing = grid.get(key);
       if (existing) {
         existing.count += 1;
-        existing.totalRent += p.monthly_rent;
+        existing.totalRent += rent;
+        existing.corpCount += d.corp_landlord ? 1 : 0;
       } else {
-        grid.set(key, { x, y, count: 1, totalRent: p.monthly_rent });
+        grid.set(key, { x, y, count: 1, totalRent: rent, corpCount: d.corp_landlord ? 1 : 0 });
       }
     }
 
     ctx.globalAlpha = 0.75;
     for (const dot of grid.values()) {
       const avgRent = dot.totalRent / dot.count;
-      const r = dot.count === 1 ? baseRadius : baseRadius + Math.min(Math.sqrt(dot.count) * 1.2, 10);
-      ctx.fillStyle = dotColorScale(avgRent);
+      const r = dot.count === 1 ? baseRadius : baseRadius + Math.min(Math.sqrt(dot.count) * 0.9, 8);
+
+      // Color: corporate landlord = red, individual = green
+      const corpRatio = dot.corpCount / dot.count;
+      if (darkColorMode) {
+        ctx.fillStyle = corpRatio > 0.5 ? '#c0392b' : '#2d8c2d';
+      } else if (highlightInvestors && corpRatio > 0.5) {
+        ctx.fillStyle = corpColorScale(avgRent);
+      } else {
+        ctx.fillStyle = dotColorScale(avgRent);
+      }
+
       ctx.beginPath();
       ctx.arc(dot.x, dot.y, r, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1.0;
+
+    // Highlight the clicked dot: stroke directly on its circumference
+    if (selectedDotLoc) {
+      const [sx, sy] = projection([selectedDotLoc.lng, selectedDotLoc.lat]);
+      if (sx >= -20 && sx <= width + 20 && sy >= -20 && sy <= height + 20) {
+        const hitKey = `${Math.round(sx)},${Math.round(sy)}`;
+        const cluster = grid.get(hitKey);
+        const dotR = cluster
+          ? (cluster.count === 1 ? baseRadius : baseRadius + Math.min(Math.sqrt(cluster.count) * 1.2, 10))
+          : baseRadius;
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(sx, sy, dotR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
   }
 
   // ── Tooltip helpers ────────────────────────────────────────────────────────
@@ -181,6 +276,64 @@
     } else {
       selectedNeighborhood = feature;
     }
+  }
+
+  // ── Property popup (dot click) ──────────────────────────────────────────────
+  let propertyPopup = { visible: false, x: 0, y: 0, props: [] };
+  let selectedDotLoc = null; // {lat, lng} of the clicked cluster center
+
+  function handleCanvasClick(event) {
+    if (!projection || !filteredDots.length) return;
+    const rect = canvasEl.getBoundingClientRect();
+    const cx = event.clientX - rect.left;
+    const cy = event.clientY - rect.top;
+    const hitRadius = 12;
+
+    // Find eviction cases near click
+    const hits = [];
+    for (const d of filteredDots) {
+      const [px, py] = projection([d.lng, d.lat]);
+      const dx = px - cx, dy = py - cy;
+      if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+        hits.push(d);
+      }
+    }
+
+    if (hits.length > 0) {
+      selectedDotLoc = { lat: hits[0].lat, lng: hits[0].lng };
+      if (externalPopup) {
+        selectedDots = hits.slice(0, 5);
+      } else {
+        const popupW = 300;
+        const popupH = Math.min(400, 120 + hits.length * 110);
+        const rightBound = width - rightReservedPx - 8;
+        let px = cx + 14;
+        if (px + popupW > rightBound) px = cx - 14 - popupW;
+        px = Math.max(8, Math.min(px, rightBound - popupW));
+        let py = cy - 10;
+        py = Math.max(8, Math.min(py, height - popupH - 8));
+        propertyPopup = {
+          visible: true,
+          x: px,
+          y: py,
+          props: hits.slice(0, 5),
+        };
+      }
+      drawDots();
+    } else {
+      propertyPopup = { ...propertyPopup, visible: false };
+      if (externalPopup) selectedDots = [];
+      if (selectedDotLoc) {
+        selectedDotLoc = null;
+        drawDots();
+      }
+    }
+  }
+
+  function closeDotPopup() {
+    propertyPopup = { ...propertyPopup, visible: false };
+    selectedDotLoc = null;
+    drawDots();
   }
 
   // ── Close sidebar ──────────────────────────────────────────────────────────
@@ -246,12 +399,13 @@
         {#each geoData.features as feature (feature.properties.name)}
           {@const isHovered = hoveredName === feature.properties.name}
           {@const isSelected = selectedNeighborhood?.properties.name === feature.properties.name}
-          {@const isZoomTarget = zoomFeature?.properties.name === feature.properties.name}
+          {@const isZoomTarget = effectiveZoomFeature?.properties.name === feature.properties.name}
           {@const zoomStroke = isZoomTarget && zoomProgress > 0}
+          {@const isDimmed = dimOtherNeighborhoods && focusNeighborhood && feature.properties.name !== focusNeighborhood}
           <path
             d={pathGen(feature)}
-            fill="#e8e8e8"
-            opacity={zoomFeature && zoomProgress > 0 && !isZoomTarget ? 1 - zoomProgress * 0.7 : 1}
+            fill={isDimmed ? '#d8d8d8' : '#e8e8e8'}
+            opacity={isDimmed ? 0.3 : (effectiveZoomFeature && zoomProgress > 0 && !isZoomTarget ? 1 - zoomProgress * 0.7 : 1)}
             stroke={zoomStroke ? '#2d8c2d' : isSelected ? '#2d8c2d' : isHovered ? '#666' : '#bbb'}
             stroke-width={zoomStroke ? 1.5 + zoomProgress * 1.5 : isSelected ? 2 : isHovered ? 1.5 : 0.8}
             class="neighborhood-path"
@@ -270,12 +424,12 @@
 
     </svg>
 
-    <!-- Canvas overlay for property dots -->
+    <!-- Canvas overlay for property dots (clickable) -->
     <canvas
       bind:this={canvasEl}
-      class="dots-canvas"
+      class="dots-canvas clickable"
       style="width:{width}px; height:{height}px;"
-      aria-hidden="true"
+      on:click={handleCanvasClick}
     ></canvas>
 
     <!-- Labels above dots -->
@@ -350,7 +504,57 @@
         <span class="tooltip-key">Total sales</span>
         <span class="tooltip-val">{fp.count?.toLocaleString() ?? 'N/A'}</span>
       </div>
-      <div class="tooltip-hint">Dots may overlap at shared addresses. Click to pin details.</div>
+      <div class="tooltip-hint">Click a dot for property details.</div>
+    </div>
+  {/if}
+
+  <!-- Property popup (dot click) -->
+  {#if propertyPopup.visible && propertyPopup.props.length > 0}
+    <div class="property-popup" style="left:{propertyPopup.x}px; top:{propertyPopup.y}px;">
+      <button class="popup-close" on:click={closeDotPopup}>&times;</button>
+      {#each propertyPopup.props as p, idx}
+        {#if idx > 0}<hr class="popup-divider" />{/if}
+        <div class="popup-address">{p.address ?? 'Unknown Address'}{#if p.unit}, Unit {p.unit}{/if}</div>
+        <div class="popup-grid">
+          <div class="popup-row"><span class="pk">Case type</span><span class="pv">{p.case_type}</span></div>
+          <div class="popup-row"><span class="pk">Filed</span><span class="pv">{p.file_date ?? '—'}</span></div>
+          <div class="popup-row"><span class="pk">Status</span><span class="pv">{p.case_status ?? '—'}</span></div>
+          {#if p.dispo}<div class="popup-row"><span class="pk">Outcome</span><span class="pv">{p.dispo}</span></div>{/if}
+          <div class="popup-row"><span class="pk">Landlord</span><span class="pv" class:red={p.corp_landlord}>{p.corp_landlord ? 'Corporate' : 'Individual'}</span></div>
+          {#if p.plaintiff}<div class="popup-row"><span class="pk">Filed by</span><span class="pv" style="font-size:0.65rem; white-space:normal;">{p.plaintiff.length > 50 ? p.plaintiff.slice(0, 50) + '...' : p.plaintiff}</span></div>{/if}
+          {#if p.rent_at_filing || p.rent_now}
+            {@const pctChange = p.rent_at_filing && p.rent_now
+              ? Math.round((p.rent_now / p.rent_at_filing - 1) * 100)
+              : null}
+            <div class="rent-compare">
+              <div class="rent-compare-col">
+                <div class="rent-compare-label">At filing</div>
+                <div class="rent-compare-val then">
+                  {p.rent_at_filing ? `$${p.rent_at_filing.toLocaleString()}` : '—'}
+                </div>
+              </div>
+              <div class="rent-compare-arrow">
+                {#if pctChange != null}
+                  <div class="rent-compare-pct" class:up={pctChange > 0} class:down={pctChange < 0}>
+                    {pctChange > 0 ? '+' : ''}{pctChange}%
+                  </div>
+                {/if}
+                <div class="rent-compare-line"></div>
+              </div>
+              <div class="rent-compare-col">
+                <div class="rent-compare-label">Now</div>
+                <div class="rent-compare-val now">
+                  {p.rent_now ? `$${p.rent_now.toLocaleString()}` : '—'}
+                </div>
+              </div>
+            </div>
+          {/if}
+          <div class="popup-row"><span class="pk">Neighborhood</span><span class="pv">{p.neighborhood}</span></div>
+        </div>
+      {/each}
+      {#if propertyPopup.props.length > 1}
+        <div class="popup-multi">{propertyPopup.props.length} eviction cases at this location</div>
+      {/if}
     </div>
   {/if}
 
@@ -378,6 +582,11 @@
     top: 0;
     left: 0;
     pointer-events: none;
+  }
+
+  .dots-canvas.clickable {
+    pointer-events: auto;
+    cursor: crosshair;
   }
 
   .labels-svg {
@@ -498,6 +707,158 @@
     color: #aaa;
     margin-top: 6px;
     text-align: right;
+    font-style: italic;
+  }
+
+  /* ── Property popup ──────────────────────────────────────────────────── */
+  .property-popup {
+    position: absolute;
+    background: rgba(255,255,255,0.98);
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px 14px;
+    pointer-events: auto;
+    z-index: 20;
+    min-width: 240px;
+    max-width: 300px;
+    max-height: 400px;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  }
+
+  .popup-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 1.1rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 4px;
+  }
+  .popup-close:hover { color: #333; }
+
+  .popup-address {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+    padding-right: 20px;
+  }
+
+  .popup-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .popup-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.72rem;
+  }
+
+  .pk { color: #888; }
+  .pv { font-weight: 600; color: #333; white-space: nowrap; }
+  .pv.accent { color: #2d8c2d; }
+  .pv.orange { color: #b35900; }
+  .pv.red { color: #c0392b; }
+
+  .popup-divider {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 8px 0;
+  }
+
+  .rent-compare {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 4px;
+    padding: 10px 10px;
+    background: linear-gradient(135deg, #fff8ec 0%, #fdecec 100%);
+    border: 1px solid #f0d9c8;
+    border-radius: 6px;
+  }
+  .rent-compare-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-width: 0;
+  }
+  .rent-compare-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8a7a6a;
+    margin-bottom: 2px;
+  }
+  .rent-compare-val {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .rent-compare-val.then { color: #7a5c3a; }
+  .rent-compare-val.now { color: #c0392b; }
+  .rent-compare-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 52px;
+  }
+  .rent-compare-pct {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    color: #555;
+    margin-bottom: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .rent-compare-pct.up {
+    background: #fde8e6;
+    border-color: #f2b3aa;
+    color: #c0392b;
+  }
+  .rent-compare-pct.down {
+    background: #e8f5e8;
+    border-color: #9ec99e;
+    color: #2d8c2d;
+  }
+  .rent-compare-line {
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, #e0c9b3 0%, #d98b7c 100%);
+    border-radius: 1px;
+    position: relative;
+  }
+  .rent-compare-line::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-left: 6px solid #d98b7c;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+  }
+
+  .popup-multi {
+    font-size: 0.65rem;
+    color: #999;
+    text-align: center;
+    margin-top: 8px;
     font-style: italic;
   }
 

@@ -45,6 +45,41 @@ export async function loadProperties() {
   return d3.json('./data/properties.json');
 }
 
+export async function loadZoriByNeighborhood() {
+  return d3.json('./data/zori_by_neighborhood.json');
+}
+
+export async function loadEvictionsByNeighborhood() {
+  return d3.json('./data/evictions_by_neighborhood.json');
+}
+
+export async function loadStoryData() {
+  return d3.json('./data/corp_ownership_timeseries.json');
+}
+
+export async function loadEvictionDots() {
+  const raw = await d3.json('./data/eviction_dots.json');
+  if (!Array.isArray(raw)) return raw;
+  // Drop records whose geocoded lat/lng fall outside the Boston area — these
+  // are bad geocodes (wrong city, or off by a tenth of a degree in lat/lng).
+  return raw.filter(d => {
+    const { lat, lng } = d ?? {};
+    return typeof lat === 'number' && typeof lng === 'number'
+      && lat >= 42.22 && lat <= 42.40
+      && lng >= -71.20 && lng <= -70.99;
+  });
+}
+
+// Filter eviction dots by rent budget and year
+export function filterEvictionDots(dots, maxRent, { useCurrentRent = false, maxYear = 2024 } = {}) {
+  const rentKey = useCurrentRent ? 'rent_now' : 'rent_at_filing';
+  return dots.filter(d =>
+    d[rentKey] != null &&
+    d[rentKey] <= maxRent + 2000 &&
+    (d.file_year == null || d.file_year <= maxYear)
+  );
+}
+
 // ── Metric definitions ────────────────────────────────────────────────────────
 // Each entry describes one neighborhood-level metric that can be used to color
 // the choropleth layer.
@@ -85,20 +120,35 @@ export function buildColorScale(features, metricKey) {
   return { scale, extent };
 }
 
-// ── Dot color scale (3 discrete ranges relative to slider) ────────────────────
-// [0, budget] = green, [budget, budget+1000] = yellow-green, [budget+1000, budget+2000] = orange-red
-const RANGE_COLORS = ['#2d8c2d', '#b8a929', '#c0392b'];
-
+// ── Dot color scale (continuous light → dark green by rent) ──────────────────
 export function makeDotColorScale(maxRent) {
-  return d3.scaleThreshold()
-    .domain([maxRent, maxRent + 1000])
-    .range(RANGE_COLORS);
+  return d3.scaleLinear()
+    .domain([0, maxRent + 2000])
+    .range(['#b2dfb2', '#1a5e1a'])
+    .clamp(true);
+}
+
+// ── Investor dot color scale (continuous light → dark orange by rent) ────────
+export function makeInvestorColorScale(maxRent) {
+  return d3.scaleLinear()
+    .domain([0, maxRent + 2000])
+    .range(['#fdd9b5', '#b35900'])
+    .clamp(true);
+}
+
+// ── Eviction dot color scale (continuous light → dark red by rent) ───────────
+export function makeEvictionColorScale(maxRent) {
+  return d3.scaleLinear()
+    .domain([0, maxRent + 2000])
+    .range(['#f5b7b1', '#7b241c'])
+    .clamp(true);
 }
 
 // ── Filter helper ─────────────────────────────────────────────────────────────
 // Returns properties up to budget+2000, optionally excluding eviction-flagged.
-export function filterProperties(properties, maxRent, excludeEvicted = false) {
+export function filterProperties(properties, maxRent, { useCurrentRent = false, excludeEvicted = false } = {}) {
+  const rentKey = useCurrentRent ? 'monthly_rent_now' : 'monthly_rent';
   return properties.filter((p) =>
-    p.monthly_rent <= maxRent + 2000 && (!excludeEvicted || !p.had_eviction)
+    p[rentKey] <= maxRent + 2000 && (!excludeEvicted || !p.had_eviction)
   );
 }
