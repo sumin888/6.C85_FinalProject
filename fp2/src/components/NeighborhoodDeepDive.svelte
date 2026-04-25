@@ -29,6 +29,9 @@
   let storyScrollStep = 0;
   $: legendSplit = storyScrollStep >= 2;
 
+  // Opens the global References modal
+  export let openReferences = () => {};
+
 
   $: allNeighborhoods = geoData
     ? geoData.features.map(f => f.properties.name).sort()
@@ -88,6 +91,13 @@
         </div>
       </div>
     </div>
+
+    <div class="legend-footnote">
+      <span>Built from MAPC sales · MA Trial Court evictions · Boston assessment rolls · Zillow ZORI · BPDA + Census.</span>
+      <button class="legend-refs-link" on:click={openReferences}>
+        See full references ↗
+      </button>
+    </div>
   </aside>
 
   <div class="deep-dive-panel">
@@ -124,6 +134,7 @@
       bind:mapHighlightInvestors
       bind:mapHighlightEvictions
       bind:scrollStep={storyScrollStep}
+      {openReferences}
     />
 
     <div class="explore-cta">
@@ -254,6 +265,34 @@
     font-size: 0.66rem;
     color: #777;
   }
+
+  .dot-legend-overlay .legend-footnote {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .dot-legend-overlay .legend-footnote span {
+    font-size: 0.66rem;
+    color: #999;
+    line-height: 1.45;
+    font-style: italic;
+  }
+  .dot-legend-overlay .legend-refs-link {
+    align-self: flex-start;
+    background: none;
+    border: none;
+    color: #2563eb;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+  .dot-legend-overlay .legend-refs-link:hover { color: #1d4dbf; }
 
   .deep-dive-back {
     pointer-events: auto;

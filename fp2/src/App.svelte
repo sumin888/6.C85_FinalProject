@@ -6,6 +6,11 @@
   import StoryIntro from './components/StoryIntro.svelte';
   import NeighborhoodDeepDive from './components/NeighborhoodDeepDive.svelte';
   import IntroScroller from './components/IntroScroller.svelte';
+  import ReferencesModal from './components/ReferencesModal.svelte';
+
+  let referencesOpen = false;
+  function openReferences() { referencesOpen = true; }
+  function closeReferences() { referencesOpen = false; }
 
   // ── Global state ───────────────────────────────────────────────────────
   let geoData = null;
@@ -123,6 +128,7 @@
         {zoriData}
         {evictionDots}
         {geoData}
+        {openReferences}
         on:enterDeepDive={enterDeepDive}
       />
     {:else}
@@ -208,6 +214,7 @@
           bind:mapDimOthers
           on:back={backToStory}
           on:explore={enterExplore}
+          {openReferences}
         />
       {:else if phase === 'explore'}
         <IntroScroller
@@ -224,10 +231,13 @@
           bind:resetViewSignal={mapResetViewSignal}
           on:back={backToStory}
           on:backToDeepDive={enterDeepDive}
+          {openReferences}
         />
       {/if}
     {/if}
   {/if}
+
+  <ReferencesModal open={referencesOpen} on:close={closeReferences} />
 </div>
 
 <style>
@@ -240,6 +250,7 @@
   :global(html, body, #app) { height: auto; }
 
   .app { position: relative; }
+
 
   .map-sticky {
     position: sticky; top: 0; height: 100vh; width: 100%;

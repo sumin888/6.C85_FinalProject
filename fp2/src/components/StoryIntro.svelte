@@ -1,9 +1,12 @@
 <script>
   import { onMount, tick, createEventDispatcher } from 'svelte';
   import { fade } from 'svelte/transition';
+
+  export let openReferences = () => {};
   import AnimatedLineChart from './AnimatedLineChart.svelte';
   import FlowDiagram from './FlowDiagram.svelte';
   import OwnershipVsFilings from './OwnershipVsFilings.svelte';
+  import DonutChart from './DonutChart.svelte';
 
   const dispatch = createEventDispatcher();
 
@@ -13,7 +16,7 @@
   export let geoData;     // neighborhoods.geojson (for median income)
 
   let scrollStep = 0;
-  let stepProgresses = [0, 0, 0, 0, 0, 0, 0]; // per-step scroll progress 0–1
+  let stepProgresses = [0, 0, 0, 0, 0, 0, 0, 0]; // per-step scroll progress 0–1
 
   // ── Sale-flow baseline vs. latest for the flow diagram ─────────────────
   $: saleFlowDiagram = (() => {
@@ -44,27 +47,82 @@
       const f = geoData.features.find(x => x.properties?.name === name);
       return {
         name,
-        income: f?.properties?.avg_renter_mhi ?? null,
+        renter: f?.properties?.avg_renter_mhi ?? null,
+        owner: f?.properties?.avg_owner_mhi ?? null,
       };
-    }).filter(d => d.income != null);
+    }).filter(d => d.renter != null);
+  })();
+  // Boston-wide medians: prefer the household-weighted citywide value baked
+  // into the geojson metadata (every tract weighted by its renter/owner
+  // household count). Falls back to a household-weighted average across the
+  // available neighborhood records if metadata isn't present.
+  $: bostonMedians = (() => {
+    const meta = geoData?.metadata;
+    if (meta?.citywide_renter_mhi && meta?.citywide_owner_mhi) {
+      return { renter: meta.citywide_renter_mhi, owner: meta.citywide_owner_mhi };
+    }
+    if (!geoData?.features) return { renter: 54000, owner: 118000 };
+    const r = [], o = [];
+    for (const f of geoData.features) {
+      if (f.properties?.avg_renter_mhi) r.push(f.properties.avg_renter_mhi);
+      if (f.properties?.avg_owner_mhi) o.push(f.properties.avg_owner_mhi);
+    }
+    return {
+      renter: r.length ? Math.round(r.reduce((s, v) => s + v, 0) / r.length) : 54000,
+      owner: o.length ? Math.round(o.reduce((s, v) => s + v, 0) / o.length) : 118000,
+    };
+  })();
+
+  // ── Eviction-cause donut data (citywide, computed from evictionDots) ──
+  $: evictionCauseSlices = (() => {
+    if (!Array.isArray(evictionDots) || evictionDots.length === 0) return null;
+    const counts = new Map();
+    for (const d of evictionDots) {
+      const c = (d.case_type || 'Other').trim();
+      counts.set(c, (counts.get(c) || 0) + 1);
+    }
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const palette = ['#c0392b', '#e67e22', '#f1c40f', '#2563eb', '#888888'];
+    const top = sorted.slice(0, 4);
+    const restSum = sorted.slice(4).reduce((s, [, v]) => s + v, 0);
+    const slices = top.map(([label, value], i) => ({ label, value, color: palette[i] }));
+    if (restSum > 0) slices.push({ label: 'Other', value: restSum, color: palette[palette.length - 1] });
+    const top1 = sorted[0];
+    return {
+      slices,
+      total,
+      topLabel: top1 ? top1[0] : null,
+      topPct: top1 ? Math.round((top1[1] / total) * 100) : null,
+    };
   })();
 
   // ── Step-3 sub-scroll: phase + derived progress values ─────────────────
   // Scroll timeline: rent chart draws from 0 → 0.40, then a pause zone from
   // 0.40 → 0.60 (both charts sit still so the reader can take a breath),
   // then the income chart starts drawing from 0.60 → 1.00.
-  const BOSTON_RENTER_MEDIAN = 65000;
-
-  $: priceP = stepProgresses[3] ?? 0;
+  $: priceP = stepProgresses[4] ?? 0;
   $: pricePhase = priceP >= 0.6 ? 'income' : 'rent';
   $: rentProgress = Math.min(1, Math.max(0, priceP / 0.40));
   $: incomeProgress = Math.min(1, Math.max(0, (priceP - 0.60) / 0.40));
-  $: focusIncomeMax = focusIncome.length ? Math.max(...focusIncome.map(d => d.income)) : 1;
-  // Boston-median bar reveals once the user scrolls a little past the start
-  // of the income phase, and completes quickly — the rescale + reveal lands
-  // in a tight window so the bars visibly snap down.
+  // Bars share one scale: the largest value across renter + owner across all
+  // neighborhood rows + the Boston row. Owner bars sit underneath, renter
+  // bars overlay on top.
+  $: focusIncomeMax = (() => {
+    const vals = [];
+    for (const r of focusIncome) {
+      if (r.renter) vals.push(r.renter);
+      if (r.owner) vals.push(r.owner);
+    }
+    if (bostonMedians.renter) vals.push(bostonMedians.renter);
+    if (bostonMedians.owner) vals.push(bostonMedians.owner);
+    return vals.length ? Math.max(...vals) : 1;
+  })();
+  // Boston-median row reveals once the user scrolls a little past the start
+  // of the income phase, in a tight window for visible snap-in.
   $: bostonBarProgress = Math.min(1, Math.max(0, (incomeProgress - 0.25) / 0.15));
-  $: incomeScale = focusIncomeMax + (BOSTON_RENTER_MEDIAN - focusIncomeMax) * bostonBarProgress;
+  $: bostonRenterW = focusIncomeMax ? bostonMedians.renter / focusIncomeMax * 100 : 0;
+  $: bostonOwnerW = focusIncomeMax ? bostonMedians.owner / focusIncomeMax * 100 : 0;
 
   // ── Prepare chart data ─────────────────────────────────────────────────
   $: corpLines = storyData ? [
@@ -205,9 +263,32 @@
     </div>
   </div>
 
-  <!-- Step 1: Boston's Corporate Takeover — ownership trend -->
+  <!-- Step 1: A short, trust-building note about the data -->
   <div class="story-scroll-step" data-step="1">
-    <div class="story-section" class:active={scrollStep === 1}>
+    <div class="story-section trust-section" class:active={scrollStep === 1}>
+      <div class="trust-card">
+        <div class="trust-eyebrow">Where this data comes from</div>
+        <p class="trust-lede">
+          Everything you're about to see is built from <strong>public,
+          authoritative sources</strong> — Metro Boston property sales, MA
+          Trial Court eviction filings, City of Boston assessment rolls,
+          Zillow's rent index, and US Census tract geometry. We've cleaned,
+          joined, and aggregated them, but the raw ground truth is open —
+          you can verify any of it yourself.
+        </p>
+        <p class="trust-cta">
+          The full list of sources lives at the bottom of this page, and is
+          one click away on every page via the
+          <strong>References</strong> button.
+        </p>
+        <div class="trust-arrow" aria-hidden="true">↓ Continue</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Boston's Corporate Takeover — ownership trend -->
+  <div class="story-scroll-step" data-step="2">
+    <div class="story-section" class:active={scrollStep === 2}>
       <div class="story-text">
         <h1>Boston's Corporate Takeover</h1>
         <p>
@@ -226,7 +307,7 @@
       <div class="story-chart">
         <AnimatedLineChart
           lines={corpLines}
-          progress={scrollStep >= 1 ? Math.max(stepProgresses[1], scrollStep > 1 ? 1 : 0) : 0}
+          progress={scrollStep >= 2 ? Math.max(stepProgresses[2], scrollStep > 2 ? 1 : 0) : 0}
           yFormat={v => (v * 100).toFixed(0) + '%'}
           xFormat={v => String(Math.round(v))}
           yLabel="Rate"
@@ -238,8 +319,8 @@
   </div>
 
   <!-- Step 2: Who's Buying — Sankey-style flow diagram -->
-  <div class="story-scroll-step" data-step="2">
-    <div class="story-section flow-section" class:active={scrollStep === 2}>
+  <div class="story-scroll-step" data-step="3">
+    <div class="story-section flow-section" class:active={scrollStep === 3}>
       <div class="story-text">
         <h1>Who's Buying?</h1>
         <p>
@@ -281,7 +362,7 @@
             latest={saleFlowDiagram.latest}
             baselineYear={saleFlowDiagram.baselineYear}
             latestYear={saleFlowDiagram.latestYear}
-            progress={scrollStep >= 2 ? Math.max(stepProgresses[2], scrollStep > 2 ? 1 : 0) : 0}
+            progress={scrollStep >= 3 ? Math.max(stepProgresses[3], scrollStep > 3 ? 1 : 0) : 0}
           />
         {/if}
       </div>
@@ -289,9 +370,9 @@
   </div>
 
   <!-- Step 3: The Price You Pay — sub-scroll between rent and income views -->
-  <div class="story-scroll-step tall" data-step="3">
+  <div class="story-scroll-step tall" data-step="4">
     <div class="price-sticky">
-      <div class="story-section" class:active={scrollStep === 3}>
+      <div class="story-section" class:active={scrollStep === 4}>
         <div class="story-text">
           <h1>The Price You Pay</h1>
           {#if pricePhase === 'rent'}
@@ -337,26 +418,37 @@
           {:else if focusIncome.length}
             <div in:fade={{ duration: 380, delay: 100 }} out:fade={{ duration: 220 }} class="income-compare">
               <div class="income-caption">
-                Median renter household income
+                <span>Median household income — <strong style="color:#2563eb;">renter</strong> overlaid on <strong style="color:#888;">owner</strong></span>
               </div>
               {#each focusIncome as row, i}
                 {@const revealed = incomeProgress >= i * 0.05}
                 {@const color = i === 0 ? '#c0392b' : i === 1 ? '#e67e22' : '#3498db'}
+                {@const ownerW = (row.owner ?? 0) / focusIncomeMax * 100}
+                {@const renterW = (row.renter ?? 0) / focusIncomeMax * 100}
                 <div class="income-row" class:revealed>
                   <span class="income-name">{row.name}</span>
                   <div class="income-bar">
-                    <div class="income-fill" style="width:{(row.income / incomeScale) * 100}%; background:{color}"></div>
+                    <div class="owner-fill" style="width:{ownerW}%"></div>
+                    <div class="renter-fill" style="width:{renterW}%; background:{color}"></div>
                   </div>
-                  <span class="income-val">${row.income.toLocaleString()}/yr</span>
+                  <span class="income-val">
+                    <span class="renter-val" style="color:{color}">${(row.renter ?? 0).toLocaleString()}</span>
+                    <span class="owner-val">${(row.owner ?? 0).toLocaleString()}</span>
+                  </span>
                 </div>
               {/each}
               <div class="income-row boston" class:revealed={bostonBarProgress > 0.05}>
                 <span class="income-name boston-name">Boston<br/>median</span>
                 <div class="income-bar">
-                  <div class="income-fill boston-fill"
-                    style="width:{(BOSTON_RENTER_MEDIAN / incomeScale) * bostonBarProgress * 100}%"></div>
+                  <div class="owner-fill boston-owner"
+                    style="width:{bostonOwnerW * bostonBarProgress}%"></div>
+                  <div class="renter-fill boston-renter"
+                    style="width:{bostonRenterW * bostonBarProgress}%"></div>
                 </div>
-                <span class="income-val">${BOSTON_RENTER_MEDIAN.toLocaleString()}/yr</span>
+                <span class="income-val">
+                  <span class="renter-val">${bostonMedians.renter.toLocaleString()}</span>
+                  <span class="owner-val">${bostonMedians.owner.toLocaleString()}</span>
+                </span>
               </div>
             </div>
           {/if}
@@ -366,8 +458,8 @@
   </div>
 
   <!-- Step 4: When Rent Outruns Income — Evictions -->
-  <div class="story-scroll-step" data-step="4">
-    <div class="story-section eviction-section" class:active={scrollStep === 4}>
+  <div class="story-scroll-step" data-step="5">
+    <div class="story-section eviction-section" class:active={scrollStep === 5}>
       <div class="story-text">
         <h1>When Rent Outruns Income</h1>
         <p>
@@ -384,26 +476,24 @@
           majority of them.
         </p>
       </div>
-      <div class="story-callout">
-        <div class="callout-stat">
-          <span class="callout-num">~65%</span>
-          <span class="callout-label">of eviction filings are for non-payment of rent</span>
+      {#if evictionCauseSlices}
+        <div class="cause-pie">
+          <DonutChart
+            slices={evictionCauseSlices.slices}
+            size={180}
+            thickness={32}
+            centerValue="{Math.round(evictionCauseSlices.topPct * (scrollStep >= 5 ? Math.max(stepProgresses[5], scrollStep > 5 ? 1 : 0) : 0))}%"
+            centerLabel="non-payment"
+            progress={scrollStep >= 5 ? Math.max(stepProgresses[5], scrollStep > 5 ? 1 : 0) : 0}
+          />
         </div>
-        <div class="callout-stat">
-          <span class="callout-num">6,000+</span>
-          <span class="callout-label">eviction filings in Boston, 2020–2024</span>
-        </div>
-        <div class="callout-stat">
-          <span class="callout-num">Majority</span>
-          <span class="callout-label">filed by corporate landlords</span>
-        </div>
-      </div>
+      {/if}
     </div>
   </div>
 
   <!-- Step 5: Who's Really Filing — normalized corp vs individual -->
-  <div class="story-scroll-step" data-step="5">
-    <div class="story-section ovf-section" class:active={scrollStep === 5}>
+  <div class="story-scroll-step" data-step="6">
+    <div class="story-section ovf-section" class:active={scrollStep === 6}>
       <div class="story-text">
         <h1>Who's Really Filing?</h1>
         <p>
@@ -423,14 +513,14 @@
       <OwnershipVsFilings
         evictionDots={evictionDots}
         corpOwnership={storyData?.citywide?.corp_ownership ?? []}
-        progress={scrollStep >= 5 ? Math.max(stepProgresses[5], scrollStep > 5 ? 1 : 0) : 0}
+        progress={scrollStep >= 6 ? Math.max(stepProgresses[6], scrollStep > 6 ? 1 : 0) : 0}
       />
     </div>
   </div>
 
   <!-- Step 6: CTA -->
-  <div class="story-scroll-step" data-step="6">
-    <div class="story-section cta-section" class:active={scrollStep === 6}>
+  <div class="story-scroll-step" data-step="7">
+    <div class="story-section cta-section" class:active={scrollStep === 7}>
       <h1>Let's Look Closer</h1>
       <p>
         The next page is about <strong>eviction</strong> — where it's
@@ -447,6 +537,13 @@
       <button class="cta-btn" on:click={() => dispatch('enterDeepDive')}>
         Explore the Neighborhoods
       </button>
+
+      <div class="cta-footnote">
+        <span>Built from MAPC sales · MA Trial Court evictions · Boston assessment rolls · Zillow ZORI · BPDA + Census.</span>
+        <button class="cta-refs-link" on:click={openReferences}>
+          See full references ↗
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -534,6 +631,81 @@
     align-items: stretch;
   }
   .ovf-section .story-text { min-width: 0; }
+
+  .trust-section {
+    flex-direction: column;
+    max-width: 720px;
+    padding: 40px 24px;
+  }
+  .trust-card {
+    width: 100%;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-left: 4px solid #e67e22;
+    border-radius: 10px;
+    padding: 28px 32px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
+  }
+  .trust-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #888;
+    margin-bottom: 10px;
+  }
+  .trust-lede {
+    font-size: 1rem !important;
+    color: #1a1a1a !important;
+    line-height: 1.7 !important;
+    margin: 0 0 12px !important;
+  }
+  .trust-cta {
+    font-size: 0.85rem !important;
+    color: #555 !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+  }
+  .trust-arrow {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #999;
+    letter-spacing: 0.05em;
+  }
+  @media (max-width: 700px) {
+    .trust-card { padding: 22px 20px; }
+  }
+
+  .cta-footnote {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid #e8e8e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+    max-width: 580px;
+  }
+  .cta-footnote span {
+    font-size: 0.74rem;
+    color: #999;
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .cta-refs-link {
+    background: none;
+    border: none;
+    color: #2563eb;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    text-decoration: underline;
+  }
+  .cta-refs-link:hover { color: #1d4dbf; }
 
   .hero-section {
     flex-direction: column;
@@ -623,7 +795,7 @@
   }
   .income-row {
     display: grid;
-    grid-template-columns: 110px 1fr 110px;
+    grid-template-columns: 110px 1fr 130px;
     gap: 12px;
     align-items: center;
     font-size: 0.88rem;
@@ -634,37 +806,46 @@
   .income-row.revealed { opacity: 1; transform: translateX(0); }
   .income-name { font-weight: 700; color: #1a1a1a; }
   .income-bar {
-    height: 20px;
+    position: relative;
+    height: 24px;
     background: #f1f1f1;
-    border-radius: 10px;
+    border-radius: 12px;
     overflow: hidden;
   }
-  .income-fill {
+  .owner-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
     height: 100%;
-    border-radius: 10px;
-    transition: width 0.55s ease;
+    background: #d6dee8;
+    border-radius: 12px;
+    transition: width 0.55s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  .renter-fill {
+    position: absolute;
+    inset: 4px auto 4px 0;
+    height: calc(100% - 8px);
+    border-radius: 8px;
+    transition: width 0.55s cubic-bezier(0.2, 0.9, 0.3, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   }
   .income-val {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.15;
     font-variant-numeric: tabular-nums;
-    font-weight: 600;
-    color: #555;
     text-align: right;
   }
+  .renter-val { font-weight: 700; }
+  .owner-val { font-weight: 500; color: #888; font-size: 0.78rem; }
   .income-row.boston {
     margin-top: 4px;
     padding-top: 10px;
     border-top: 1px dashed #ddd;
   }
   .boston-name { color: #555 !important; font-size: 0.78rem; line-height: 1.1; }
-  .boston-fill {
-    background: repeating-linear-gradient(
-      45deg,
-      #2d3748,
-      #2d3748 6px,
-      #4a5568 6px,
-      #4a5568 12px
-    );
-  }
+  .boston-renter { background: #2d3748; }
+  .boston-owner { background: #c2cad4; }
 
   .flow-section .story-text,
   .flow-section .story-chart {
@@ -703,17 +884,35 @@
   }
   .fl-val strong { color: #1a1a1a; font-weight: 800; }
 
+  .eviction-section {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+  .eviction-section .story-text { flex: 1 1 320px; max-width: 420px; }
+  .cause-pie {
+    flex: 1 1 460px;
+    max-width: 520px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 14px 16px;
+  }
   .story-callout {
     display: flex;
     flex-direction: column;
     gap: 18px;
-    flex: 0 0 320px;
+    flex: 0 0 280px;
     padding: 28px 24px;
     background: #fff;
     border: 1px solid #e0e0e0;
     border-left: 4px solid #c0392b;
     border-radius: 10px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+  @media (max-width: 1100px) {
+    .cause-pie { flex: 0 0 100%; }
+    .story-callout { flex: 0 0 100%; }
   }
   .callout-stat {
     display: flex;

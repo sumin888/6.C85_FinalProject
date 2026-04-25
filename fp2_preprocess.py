@@ -141,6 +141,11 @@ try:
     tracts["corp_own_rate"] = pd.to_numeric(tracts["corp_own_rate"], errors="coerce")
     tracts["own_occ_rate"] = pd.to_numeric(tracts["own_occ_rate"], errors="coerce")
     tracts["r_mhi"] = pd.to_numeric(tracts["r_mhi"], errors="coerce")
+    tracts["o_mhi"] = pd.to_numeric(tracts["o_mhi"], errors="coerce")
+    # Household counts per tract for weighting tract-level medians.
+    tracts["hh"] = pd.to_numeric(tracts["hh"], errors="coerce")
+    tracts["renter_hh"] = tracts["hh"] * (1 - tracts["own_occ_rate"])
+    tracts["owner_hh"] = tracts["hh"] * tracts["own_occ_rate"]
 
     tract_geo = gpd.read_file(CENSUS_GEO)
     tract_geo["geoid"] = tract_geo["geoid"].astype(str)
@@ -151,21 +156,42 @@ try:
     hoods_geo = hoods_geo.rename(columns={"blockgr2020_ctr_neighb_name": "name"})
 
     joined = gpd.sjoin(
-        tract_merged[["geoid", "total_evictions", "corp_own_rate", "own_occ_rate", "r_mhi", "geometry"]],
+        tract_merged[["geoid", "total_evictions", "corp_own_rate", "own_occ_rate",
+                       "r_mhi", "o_mhi", "renter_hh", "owner_hh", "geometry"]],
         hoods_geo[["name", "geometry"]],
         how="left", predicate="intersects",
     )
 
-    hood_evict = (
-        joined.groupby("name")
-        .agg(total_evictions=("total_evictions", "sum"),
-             avg_corp_own_rate=("corp_own_rate", "mean"),
-             avg_own_occ_rate=("own_occ_rate", "mean"),
-             avg_renter_mhi=("r_mhi", "mean"))
-        .reset_index()
-    )
-    hood_evict[["avg_corp_own_rate", "avg_own_occ_rate", "avg_renter_mhi"]] = \
-        hood_evict[["avg_corp_own_rate", "avg_own_occ_rate", "avg_renter_mhi"]].round(3)
+    # Population-weighted tract-level medians per neighborhood.
+    # For each neighborhood, weight every tract's renter MHI by its renter
+    # household count (and owner MHI by owner HH count) so a tract with 100
+    # renters doesn't out-weigh a tract with 10.
+    def _weighted_mean(df, val_col, w_col):
+        sub = df.dropna(subset=[val_col, w_col])
+        sub = sub[sub[w_col] > 0]
+        if sub.empty:
+            return float("nan")
+        return (sub[val_col] * sub[w_col]).sum() / sub[w_col].sum()
+
+    hood_records = []
+    for name, grp in joined.groupby("name"):
+        hood_records.append({
+            "name": name,
+            "total_evictions": grp["total_evictions"].sum(),
+            "avg_corp_own_rate": grp["corp_own_rate"].mean(),
+            "avg_own_occ_rate": grp["own_occ_rate"].mean(),
+            "avg_renter_mhi": _weighted_mean(grp, "r_mhi", "renter_hh"),
+            "avg_owner_mhi":  _weighted_mean(grp, "o_mhi", "owner_hh"),
+        })
+    hood_evict = pd.DataFrame(hood_records)
+    hood_evict[["avg_corp_own_rate", "avg_own_occ_rate", "avg_renter_mhi", "avg_owner_mhi"]] = \
+        hood_evict[["avg_corp_own_rate", "avg_own_occ_rate", "avg_renter_mhi", "avg_owner_mhi"]].round(3)
+
+    # Citywide values: weight every tract by its household-tenure count, so
+    # the citywide renter median is a true population-weighted aggregate of
+    # tract-level renter medians (and owner equivalent).
+    citywide_renter_mhi = _weighted_mean(tracts, "r_mhi", "renter_hh")
+    citywide_owner_mhi = _weighted_mean(tracts, "o_mhi", "owner_hh")
 
     eviction_loaded = True
 except Exception as e:
@@ -326,14 +352,21 @@ for _, row in hoods_out.iterrows():
         fprops["avg_corp_own_rate"] = safe_float(row.get("avg_corp_own_rate"))
         fprops["avg_own_occ_rate"] = safe_float(row.get("avg_own_occ_rate"))
         fprops["avg_renter_mhi"] = safe_int(row.get("avg_renter_mhi"))
+        fprops["avg_owner_mhi"] = safe_int(row.get("avg_owner_mhi"))
     features.append({
         "type": "Feature",
         "properties": fprops,
         "geometry": mapping(row["geometry"]) if row["geometry"] else None,
     })
 
+geojson_out = {"type": "FeatureCollection", "features": features}
+if eviction_loaded:
+    geojson_out["metadata"] = {
+        "citywide_renter_mhi": safe_int(citywide_renter_mhi),
+        "citywide_owner_mhi": safe_int(citywide_owner_mhi),
+    }
 with open(OUT / "neighborhoods.geojson", "w") as f:
-    json.dump({"type": "FeatureCollection", "features": features}, f)
+    json.dump(geojson_out, f)
 
 # 10. Write properties.json — include all detail fields for interactive popups
 out_cols = ["lat", "lon", "monthly_rent", "monthly_rent_now", "year", "neighborhood",

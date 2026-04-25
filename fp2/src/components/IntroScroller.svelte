@@ -17,6 +17,7 @@
   export let mapUseCurrentRent = false;
   export let mapHighlightInvestors = false;
   export let mapHighlightEvictions = false;
+  export let openReferences = () => {};
   export let mapZoomFeature = null;
   export let mapZoomProgress = 0;
 
@@ -123,6 +124,13 @@
   </div>
 
   <div class="legend-hint">Click any dot to see property details.</div>
+
+  <div class="legend-footnote">
+    <span>Built from MAPC sales · MA Trial Court evictions · Boston assessment rolls · Zillow ZORI · BPDA + Census.</span>
+    <button class="legend-refs-link" on:click={openReferences}>
+      See full references ↗
+    </button>
+  </div>
 </aside>
 
 <!-- Right: property detail bubble (below legend) -->
@@ -429,6 +437,33 @@
     margin-top: 6px;
     font-style: italic;
   }
+  .legend-footnote {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .legend-footnote span {
+    font-size: 0.66rem;
+    color: #999;
+    line-height: 1.45;
+    font-style: italic;
+  }
+  .legend-refs-link {
+    align-self: flex-start;
+    background: none;
+    border: none;
+    color: #2563eb;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+  .legend-refs-link:hover { color: #1d4dbf; }
   .legend-subtitle {
     font-size: 0.65rem;
     font-weight: 700;

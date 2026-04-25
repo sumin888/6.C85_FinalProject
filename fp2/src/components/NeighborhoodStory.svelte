@@ -21,6 +21,8 @@
 
   // Exposed so the parent can render a contextual legend overlay
   export let scrollStep = 0;
+  // Opens the global References modal
+  export let openReferences = () => {};
   let panelEl;
 
   $: story = stories[neighborhood] ?? {};
@@ -332,6 +334,7 @@
     scroll-snap-type: y proximity;
     flex: 1;
   }
+
 
   .story-step {
     min-height: 72vh;
