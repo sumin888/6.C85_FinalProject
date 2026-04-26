@@ -165,6 +165,11 @@
   <div class="story-step" data-step="1">
     <div class="story-card" class:active={scrollStep === 1}>
       <h3>Eviction in {neighborhood}</h3>
+      <p class="step-narrative">
+        Every dot on the map you're looking at is a real eviction case
+        filed in {neighborhood} between 2020 and 2024. Behind each one
+        is a household — and a court date.
+      </p>
       {#if eviction}
         <div class="headline-stat">
           <span class="headline-num red">{eviction.total_filings.toLocaleString()}</span>
@@ -191,6 +196,11 @@
       <p class="lede">
         Dots now <span class="inline-dot orange"></span> <strong class="orange-txt">orange</strong>
         where the filer is a <strong>corporate landlord</strong>.
+      </p>
+      <p class="step-narrative">
+        Corporate landlords own only a slice of {neighborhood}'s rentals,
+        but they file evictions far out of proportion to that share — the
+        gap below is the asymmetry tenants are absorbing.
       </p>
 
       {#if corpFileRate != null}
@@ -242,6 +252,11 @@
   <div class="story-step" data-step="3">
     <div class="story-card" class:active={scrollStep === 3}>
       <h3>The Rent Behind the Filings</h3>
+      <p class="step-narrative">
+        Eviction filings rarely come out of nowhere — they follow rent.
+        Compare {neighborhood}'s rent climb against what's happening
+        citywide and against general inflation.
+      </p>
       {#if hoodRentIncPct != null}
         {@const vsCity = cityRentIncPct != null ? hoodRentIncPct - cityRentIncPct : null}
         {@const vsCPI = hoodRentIncPct - CPI_INC_PCT}
@@ -292,6 +307,11 @@
   <div class="story-step" data-step="4">
     <div class="story-card" class:active={scrollStep === 4}>
       <h3>What's Left in {neighborhood}?</h3>
+      <p class="step-narrative">
+        Take the rent slider at the top and try a budget — see how many
+        rentals in {neighborhood} actually sit within reach today versus
+        five years ago.
+      </p>
       <p class="lede">
         At your budget of <strong>${maxRent.toLocaleString()}/mo</strong>:
       </p>
@@ -481,6 +501,12 @@
     font-size: 0.85rem !important;
     color: #333 !important;
     margin-bottom: 12px;
+  }
+  .step-narrative {
+    font-size: 0.83rem !important;
+    color: #555 !important;
+    line-height: 1.55 !important;
+    margin: 0 0 12px !important;
   }
   .inline-dot {
     display: inline-block;

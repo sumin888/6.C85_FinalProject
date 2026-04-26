@@ -60,57 +60,14 @@
 </script>
 
 <div class="ovf">
-  {#if overall}
-    <div class="hero-range">
-      Averaged across <strong>{overall.yearMin}–{overall.yearMax}</strong>
-    </div>
-    <div class="hero-card">
-      <div class="hero-block corp">
-        <div class="hero-lbl">Corporate landlords</div>
-        <div class="hero-stats">
-          <div class="stat">
-            <span class="n">{(overall.avgCorpOwn * 100).toFixed(0)}%</span>
-            <span class="s">of ownership</span>
-          </div>
-          <div class="arrow">→</div>
-          <div class="stat">
-            <span class="n orange">{(overall.avgCorpFile * 100).toFixed(0)}%</span>
-            <span class="s">of eviction filings</span>
-          </div>
-        </div>
-        <div class="hero-ratio orange-bg">
-          Corps filed at <strong>{overall.ratio.toFixed(1)}×</strong>
-          their ownership share, {overall.yearMin}–{overall.yearMax}
-        </div>
-      </div>
-      <div class="hero-block ind">
-        <div class="hero-lbl">Individual landlords</div>
-        <div class="hero-stats">
-          <div class="stat">
-            <span class="n">{((1 - overall.avgCorpOwn) * 100).toFixed(0)}%</span>
-            <span class="s">of ownership</span>
-          </div>
-          <div class="arrow">→</div>
-          <div class="stat">
-            <span class="n blue">{((1 - overall.avgCorpFile) * 100).toFixed(0)}%</span>
-            <span class="s">of eviction filings</span>
-          </div>
-        </div>
-        <div class="hero-ratio blue-bg">
-          Individuals filed at <strong>{overall.indRatio.toFixed(2)}×</strong>
-          their ownership share, {overall.yearMin}–{overall.yearMax}
-        </div>
-      </div>
-    </div>
-  {/if}
-
   <div class="year-grid">
     <div class="year-header">
       <span></span>
       <span class="col-lbl">Ownership</span>
       <span class="col-lbl">Filings</span>
-      <span class="col-lbl">Ratio</span>
+      <span class="col-lbl">Corps ratio</span>
     </div>
+
     {#each visibleRows as r, i (r.year)}
       {@const ratio = r.corpOwn ? r.corpFile / r.corpOwn : 0}
       {@const delay = i * 90}
@@ -164,69 +121,32 @@
   }
   .hero-range strong { color: #333; }
 
-  .hero-card {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    justify-content: center;
-  }
-  .hero-block {
-    padding: 14px 16px;
-    border: 1px solid #e0e0e0;
-    border-radius: 10px;
-    background: #fff;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .hero-lbl {
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #666;
-  }
-  .hero-stats {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-  }
-  .stat {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex: 1;
-  }
-  .stat .n {
-    font-size: 1.4rem;
-    font-weight: 800;
-    line-height: 1;
-    color: #333;
-    font-variant-numeric: tabular-nums;
-  }
-  .stat .n.orange { color: #e67e22; }
-  .stat .n.blue { color: #2563eb; }
-  .stat .s {
-    font-size: 0.68rem;
-    color: #888;
-    margin-top: 2px;
-    text-align: center;
-  }
-  .arrow {
-    font-size: 1.2rem;
-    color: #aaa;
-  }
-  .hero-ratio {
-    padding: 6px 8px;
+  .year-row.avg-row {
+    background: #fafbfd;
+    margin: 0 -10px 4px;
+    padding: 8px 10px;
     border-radius: 6px;
-    font-size: 0.78rem;
-    text-align: center;
-    color: #333;
+    border-bottom: 1px dashed #d6deec;
   }
-  .hero-ratio.orange-bg { background: #fff1e0; }
-  .hero-ratio.blue-bg { background: #e7efff; }
-  .hero-ratio strong { font-size: 1rem; }
+  .avg-lbl {
+    font-weight: 800;
+    color: #1a1a1a !important;
+    font-size: 0.74rem !important;
+    line-height: 1.15;
+  }
+  .avg-ratios {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-end;
+  }
+  .ratio-chip {
+    font-size: 0.9rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: #e67e22;
+  }
 
   .year-grid {
     display: flex;
@@ -239,7 +159,7 @@
   }
   .year-header, .year-row {
     display: grid;
-    grid-template-columns: 56px 1fr 1fr 52px;
+    grid-template-columns: 64px 1fr 1fr 78px;
     gap: 10px;
     align-items: center;
   }
@@ -253,6 +173,10 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: #888;
+  }
+  /* Right-most header aligns with the right-aligned ratio values below */
+  .year-header .col-lbl:last-child {
+    text-align: right;
   }
   .year-lbl {
     font-size: 0.8rem;

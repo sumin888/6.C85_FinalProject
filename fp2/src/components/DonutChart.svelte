@@ -41,6 +41,15 @@
     return out;
   })();
 
+  // Format a percentage using enough decimals to never show 0%.
+  function fmtPct(pct) {
+    if (pct === 0) return '0%';
+    if (pct >= 10) return pct.toFixed(0) + '%';
+    if (pct >= 1) return pct.toFixed(1) + '%';
+    if (pct >= 0.1) return pct.toFixed(2) + '%';
+    return '<0.1%';
+  }
+
   // Visible arcs are clipped by progress: total sweep = progress * 2π from -π/2.
   $: arcs = (() => {
     if (!total || clampedProgress === 0) return [];
@@ -73,7 +82,7 @@
       <li>
         <span class="swatch" style="background:{a.color}"></span>
         <span class="lab">{a.label}</span>
-        <span class="pct">{a.pct.toFixed(0)}%</span>
+        <span class="pct">{fmtPct(a.pct)}</span>
       </li>
     {/each}
   </ul>

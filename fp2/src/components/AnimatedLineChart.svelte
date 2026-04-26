@@ -12,7 +12,7 @@
   export let xFormat = v => v;
 
   let svgEl;
-  const margin = { top: 16, right: 120, bottom: 36, left: 56 };
+  const margin = { top: 16, right: 156, bottom: 36, left: 56 };
 
   function draw() {
     if (!svgEl || lines.length === 0) return;

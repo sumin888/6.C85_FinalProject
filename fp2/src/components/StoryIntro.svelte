@@ -303,6 +303,18 @@
           In 9 neighborhoods, corporate ownership now <em>exceeds</em>
           owner-occupancy — a reversal that was unthinkable two decades ago.
         </p>
+        <p class="detail">
+          That combination matters. An owner-occupant has every reason to
+          stabilize a building: their neighbors are their neighbors, and a
+          rent hike means losing them. A corporate owner is running a
+          portfolio — units are line items, and the fastest way to lift
+          returns is to <strong>raise rent to market</strong>, replace the
+          long-term tenant with someone who'll pay it, and repeat. As more
+          buildings shift from the first model to the second, rents climb
+          faster than wages and tenants who can't keep up get
+          <em>pushed out</em>. The line chart on the right is the leading
+          indicator; the eviction map you'll see later is the trailing one.
+        </p>
       </div>
       <div class="story-chart">
         <AnimatedLineChart
@@ -326,31 +338,47 @@
         <p>
           Every property sale in Boston flows between two types of owners:
           <strong style="color:#2563eb;">individuals</strong> and
-          <strong style="color:#e67e22;">corporate</strong> entities. Each
-          ribbon starts at a uniform size on the
-          {saleFlowDiagram?.baselineYear ?? '2004'} side and widens or
-          narrows on the {saleFlowDiagram?.latestYear ?? 'latest'} side
-          based on how much that flow actually changed.
+          <strong style="color:#e67e22;">corporate</strong> entities.
         </p>
         {#if saleFlowDiagram}
           {@const b = saleFlowDiagram.baseline}
           {@const n = saleFlowDiagram.latest}
           <ul class="flow-list">
             <li>
-              <span class="fl-name" style="color:#e67e22;">Ind → Corp ▲</span>
-              <span class="fl-val">{(b.ind_to_corp * 100).toFixed(1)}% → <strong>{(n.ind_to_corp * 100).toFixed(1)}%</strong></span>
+              <div class="fl-head">
+                <span class="fl-name" style="color:#e67e22;">Ind → Corp ▲</span>
+                <span class="fl-val">{(b.ind_to_corp * 100).toFixed(1)}% → <strong>{(n.ind_to_corp * 100).toFixed(1)}%</strong></span>
+              </div>
+              <div class="fl-implication">
+                Family-owned homes are being <strong>handed over to LLCs</strong> at 5× the rate of two decades ago. Each transfer permanently removes a unit from the individual-owner stock.
+              </div>
             </li>
             <li>
-              <span class="fl-name" style="color:#e67e22;">Corp → Corp ▲</span>
-              <span class="fl-val">{(b.corp_to_corp * 100).toFixed(1)}% → <strong>{(n.corp_to_corp * 100).toFixed(1)}%</strong></span>
+              <div class="fl-head">
+                <span class="fl-name" style="color:#e67e22;">Corp → Corp ▲</span>
+                <span class="fl-val">{(b.corp_to_corp * 100).toFixed(1)}% → <strong>{(n.corp_to_corp * 100).toFixed(1)}%</strong></span>
+              </div>
+              <div class="fl-implication">
+                Once an LLC owns a building, the next sale tends to be to <strong>another LLC</strong>. Corporate ownership is consolidating internally — properties stay inside the corporate market and rarely return to individuals.
+              </div>
             </li>
             <li>
-              <span class="fl-name" style="color:#888;">Corp → Ind</span>
-              <span class="fl-val">{(b.corp_to_ind * 100).toFixed(1)}% → <strong>{(n.corp_to_ind * 100).toFixed(1)}%</strong></span>
+              <div class="fl-head">
+                <span class="fl-name" style="color:#888;">Corp → Ind</span>
+                <span class="fl-val">{(b.corp_to_ind * 100).toFixed(1)}% → <strong>{(n.corp_to_ind * 100).toFixed(1)}%</strong></span>
+              </div>
+              <div class="fl-implication">
+                The reverse pipeline is essentially <strong>flat</strong> — corporate sellers rarely hand properties back to individual buyers. Whatever moves into corporate hands tends to stay there.
+              </div>
             </li>
             <li>
-              <span class="fl-name" style="color:#2563eb;">Ind → Ind ▼</span>
-              <span class="fl-val">{(b.ind_to_ind * 100).toFixed(1)}% → <strong>{(n.ind_to_ind * 100).toFixed(1)}%</strong></span>
+              <div class="fl-head">
+                <span class="fl-name" style="color:#2563eb;">Ind → Ind ▼</span>
+                <span class="fl-val">{(b.ind_to_ind * 100).toFixed(1)}% → <strong>{(n.ind_to_ind * 100).toFixed(1)}%</strong></span>
+              </div>
+              <div class="fl-implication">
+                The traditional <strong>family-to-family</strong> sale — once nine of every ten transactions — is shrinking. Boston's housing market is quietly <strong>losing its individual-owner core</strong>.
+              </div>
             </li>
           </ul>
         {/if}
@@ -395,11 +423,6 @@
               the steepest rent hikes are often the ones with the least
               room to absorb them.
             </p>
-            <p class="detail">
-              <em>Falling behind on rent</em> isn't a choice here — it's
-              arithmetic. And it's how most Bostonians end up in housing
-              court.
-            </p>
           {/if}
         </div>
         <div class="story-chart">
@@ -418,7 +441,7 @@
           {:else if focusIncome.length}
             <div in:fade={{ duration: 380, delay: 100 }} out:fade={{ duration: 220 }} class="income-compare">
               <div class="income-caption">
-                <span>Median household income — <strong style="color:#2563eb;">renter</strong> overlaid on <strong style="color:#888;">owner</strong></span>
+                Median household income, by tenure
               </div>
               {#each focusIncome as row, i}
                 {@const revealed = incomeProgress >= i * 0.05}
@@ -432,8 +455,14 @@
                     <div class="renter-fill" style="width:{renterW}%; background:{color}"></div>
                   </div>
                   <span class="income-val">
-                    <span class="renter-val" style="color:{color}">${(row.renter ?? 0).toLocaleString()}</span>
-                    <span class="owner-val">${(row.owner ?? 0).toLocaleString()}</span>
+                    <span class="renter-val" style="color:{color}">
+                      <span class="tenure-tag" style="color:{color}">Renter</span>
+                      ${(row.renter ?? 0).toLocaleString()}
+                    </span>
+                    <span class="owner-val">
+                      <span class="tenure-tag muted">Owner</span>
+                      ${(row.owner ?? 0).toLocaleString()}
+                    </span>
                   </span>
                 </div>
               {/each}
@@ -446,8 +475,14 @@
                     style="width:{bostonRenterW * bostonBarProgress}%"></div>
                 </div>
                 <span class="income-val">
-                  <span class="renter-val">${bostonMedians.renter.toLocaleString()}</span>
-                  <span class="owner-val">${bostonMedians.owner.toLocaleString()}</span>
+                  <span class="renter-val">
+                    <span class="tenure-tag">Renter</span>
+                    ${bostonMedians.renter.toLocaleString()}
+                  </span>
+                  <span class="owner-val">
+                    <span class="tenure-tag muted">Owner</span>
+                    ${bostonMedians.owner.toLocaleString()}
+                  </span>
                 </span>
               </div>
             </div>
@@ -795,7 +830,7 @@
   }
   .income-row {
     display: grid;
-    grid-template-columns: 110px 1fr 130px;
+    grid-template-columns: 110px 1fr 170px;
     gap: 12px;
     align-items: center;
     font-size: 0.88rem;
@@ -838,6 +873,37 @@
   }
   .renter-val { font-weight: 700; }
   .owner-val { font-weight: 500; color: #888; font-size: 0.78rem; }
+  .tenure-tag {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 5px;
+  }
+  .tenure-tag.muted { color: #aaa; }
+  .income-tenure-key {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .key-item { display: inline-flex; align-items: center; gap: 6px; }
+  .key-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.12);
+  }
+  .key-swatch.renter {
+    background: #2563eb;
+  }
+  .key-swatch.owner {
+    background: #d6dee8;
+  }
   .income-row.boston {
     margin-top: 4px;
     padding-top: 10px;
@@ -860,19 +926,24 @@
     margin: 14px 0 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    font-size: 0.92rem;
-    max-width: 320px;
+    gap: 4px;
+    max-width: 380px;
   }
   .flow-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+  }
+  .flow-list li:last-child { border-bottom: none; }
+  .fl-head {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     gap: 14px;
-    padding: 6px 0;
-    border-bottom: 1px solid #eee;
+    font-size: 0.92rem;
   }
-  .flow-list li:last-child { border-bottom: none; }
   .fl-name {
     font-weight: 700;
     white-space: nowrap;
@@ -880,9 +951,18 @@
   .fl-val {
     color: #666;
     font-variant-numeric: tabular-nums;
-    font-size: 0.88rem;
+    font-size: 0.86rem;
   }
   .fl-val strong { color: #1a1a1a; font-weight: 800; }
+  .fl-implication {
+    font-size: 0.78rem;
+    color: #555;
+    line-height: 1.5;
+  }
+  .fl-implication strong {
+    color: #1a1a1a;
+    font-weight: 700;
+  }
 
   .eviction-section {
     flex-wrap: wrap;
