@@ -65,7 +65,7 @@
       <span></span>
       <span class="col-lbl">Ownership</span>
       <span class="col-lbl">Filings</span>
-      <span class="col-lbl">Corps ratio</span>
+      <span class="col-lbl">FTOR</span>
     </div>
 
     {#each visibleRows as r, i (r.year)}
@@ -230,6 +230,7 @@
     gap: 18px;
     font-size: 0.75rem;
     color: #555;
+    align-self: anchor-center;
   }
   .sw {
     display: inline-block;

@@ -249,15 +249,9 @@
   <div class="story-scroll-step" data-step="0">
     <div class="story-section hero-section" class:active={scrollStep === 0}>
       <div class="hero-inner">
-        <span class="hero-eyebrow">Boston Housing · 2004–2024</span>
         <h1 class="hero-title">Things are changing<br/>rapidly in Boston.</h1>
-        <p class="hero-lede">
-          <strong>Investors</strong> are buying up the city's rental housing.
-          <strong>Rents</strong> have jumped past what most renters earn.
-          And <strong class="hero-accent">evictions</strong> are piling up in the
-          neighborhoods feeling it hardest. Let us walk you through what
-          changed, who's driving it, and where it's hitting.
-        </p>
+        <p class="hero-lede">Large-scale investors are buying up housing, and rent is rising beyond renters' incomes. All the while, evictions are piling up in some neighborhoods more than others.</p>
+        <p class="hero-lede">Let us walk you through what this means.</p>
         <div class="hero-arrow" aria-hidden="true">↓ Scroll to begin</div>
       </div>
     </div>
@@ -267,19 +261,19 @@
   <div class="story-scroll-step" data-step="1">
     <div class="story-section trust-section" class:active={scrollStep === 1}>
       <div class="trust-card">
-        <div class="trust-eyebrow">Where this data comes from</div>
+        <div class="trust-eyebrow">Sources of data</div>
         <p class="trust-lede">
-          Everything you're about to see is built from <strong>public,
-          authoritative sources</strong> — Metro Boston property sales, MA
-          Trial Court eviction filings, City of Boston assessment rolls,
-          Zillow's rent index, and US Census tract geometry. We've cleaned,
-          joined, and aggregated them, but the raw ground truth is open —
-          you can verify any of it yourself.
-        </p>
+          All content in this visualization is built from sources that are <strong style="color:slategray">authoritative</strong> and
+          <strong style="color:slategray">representative</strong>:</p>
+          <ul class="trust-lede-list">
+            <li>Metro Boston property sales</li>
+            <li>MA Trial Court eviction filings</li>
+            <li>City of Boston assessment rolls</li>
+            <li>Zillow observed rent index (ZORI)</li>
+            <li>US Census tract geometry</li>
+          </ul>
         <p class="trust-cta">
-          The full list of sources lives at the bottom of this page, and is
-          one click away on every page via the
-          <strong>References</strong> button.
+          More information and links to these datasets can be found at the bottom of this section.
         </p>
         <div class="trust-arrow" aria-hidden="true">↓ Continue</div>
       </div>
@@ -292,29 +286,13 @@
       <div class="story-text">
         <h1>Boston's Corporate Takeover</h1>
         <p>
-          Over the past 20 years, corporate entities have steadily acquired
-          Boston's rental housing. Corporate ownership has risen from
-          <strong style="color:#e67e22;">5.5% in 2004</strong> to
-          <strong style="color:#e67e22;">25.3% in 2024</strong> —
-          nearly a 5× increase. Meanwhile, owner-occupancy has declined
-          from 43.6% to 38%.
+          From 2004 to 2024, Corporate ownership has risen 5x, from <strong style="color:#e67e22;">5%</strong> to <strong style="color:#e67e22;">25%</strong>. Meanwhile, owner-occupancy has declined from <strong style="color:#2563eb;"> 43%</strong> to <strong style="color:#2563eb;">38%</strong>.
         </p>
         <p class="detail">
-          In 9 neighborhoods, corporate ownership now <em>exceeds</em>
-          owner-occupancy — a reversal that was unthinkable two decades ago.
+          <strong style="color:#888;">Why is this concerning?</strong> Corporate owners prioritize the maximization of profit: This is best accomplished by favoring short-term leases over long-term tenants.
         </p>
-        <p class="detail">
-          That combination matters. An owner-occupant has every reason to
-          stabilize a building: their neighbors are their neighbors, and a
-          rent hike means losing them. A corporate owner is running a
-          portfolio — units are line items, and the fastest way to lift
-          returns is to <strong>raise rent to market</strong>, replace the
-          long-term tenant with someone who'll pay it, and repeat. As more
-          buildings shift from the first model to the second, rents climb
-          faster than wages and tenants who can't keep up get
-          <em>pushed out</em>. The line chart on the right is the leading
-          indicator; the eviction map you'll see later is the trailing one.
-        </p>
+        <p><br>How are corporate owners steadily acquiring properties?</p>
+        <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
       </div>
       <div class="story-chart">
         <AnimatedLineChart
@@ -336,9 +314,9 @@
       <div class="story-text">
         <h1>Who's Buying?</h1>
         <p>
-          Every property sale in Boston flows between two types of owners:
-          <strong style="color:#2563eb;">individuals</strong> and
-          <strong style="color:#e67e22;">corporate</strong> entities.
+          Every property sale in Boston flows between two classes:
+          <strong style="color:#2563eb;">individual owners</strong> and
+          <strong style="color:#e67e22;">corporate entities</strong>.
         </p>
         {#if saleFlowDiagram}
           {@const b = saleFlowDiagram.baseline}
@@ -346,41 +324,43 @@
           <ul class="flow-list">
             <li>
               <div class="fl-head">
-                <span class="fl-name" style="color:#e67e22;">Ind → Corp ▲</span>
-                <span class="fl-val">{(b.ind_to_corp * 100).toFixed(1)}% → <strong>{(n.ind_to_corp * 100).toFixed(1)}%</strong></span>
+                <span class="fl-name" style="color:#e67e22;">Individual-to-Corporate</span>
+                <span class="fl-val">{(b.ind_to_corp * 100).toFixed(1)}% → <strong>{(n.ind_to_corp * 100).toFixed(1)}%</strong> ▲</span>
               </div>
               <div class="fl-implication">
-                Family-owned homes are being <strong>handed over to LLCs</strong> at 5× the rate of two decades ago. Each transfer permanently removes a unit from the individual-owner stock.
+                Family-owned homes are being <strong>sold to corporate buyers</strong> at 5x the rate of two decades ago.
               </div>
             </li>
             <li>
               <div class="fl-head">
-                <span class="fl-name" style="color:#e67e22;">Corp → Corp ▲</span>
-                <span class="fl-val">{(b.corp_to_corp * 100).toFixed(1)}% → <strong>{(n.corp_to_corp * 100).toFixed(1)}%</strong></span>
+                <span class="fl-name" style="color:#e67e22;">Corporate-to-Corporate</span>
+                <span class="fl-val">{(b.corp_to_corp * 100).toFixed(1)}% → <strong>{(n.corp_to_corp * 100).toFixed(1)}%</strong> ▲</span>
               </div>
               <div class="fl-implication">
-                Once an LLC owns a building, the next sale tends to be to <strong>another LLC</strong>. Corporate ownership is consolidating internally — properties stay inside the corporate market and rarely return to individuals.
+                Sales from corporate owners tend to be made <strong>to other corporate entities</strong>.
               </div>
             </li>
             <li>
               <div class="fl-head">
-                <span class="fl-name" style="color:#888;">Corp → Ind</span>
-                <span class="fl-val">{(b.corp_to_ind * 100).toFixed(1)}% → <strong>{(n.corp_to_ind * 100).toFixed(1)}%</strong></span>
+                <span class="fl-name" style="color:#2563eb;">Corporate-to-Individual</span>
+                <span class="fl-val">{(b.corp_to_ind * 100).toFixed(1)}% → <strong>{(n.corp_to_ind * 100).toFixed(1)}%</strong> ▼</span>
               </div>
               <div class="fl-implication">
-                The reverse pipeline is essentially <strong>flat</strong> — corporate sellers rarely hand properties back to individual buyers. Whatever moves into corporate hands tends to stay there.
+                While some properties return to individual landlords, this percentage is slowly decreasing.
               </div>
             </li>
             <li>
               <div class="fl-head">
-                <span class="fl-name" style="color:#2563eb;">Ind → Ind ▼</span>
-                <span class="fl-val">{(b.ind_to_ind * 100).toFixed(1)}% → <strong>{(n.ind_to_ind * 100).toFixed(1)}%</strong></span>
+                <span class="fl-name" style="color:#2563eb;">Individual-to-Individual</span>
+                <span class="fl-val">{(b.ind_to_ind * 100).toFixed(1)}% → <strong>{(n.ind_to_ind * 100).toFixed(1)}%</strong> ▼</span>
               </div>
               <div class="fl-implication">
-                The traditional <strong>family-to-family</strong> sale — once nine of every ten transactions — is shrinking. Boston's housing market is quietly <strong>losing its individual-owner core</strong>.
+                Traditional "family-to-family sales" are decreasing over time.
               </div>
             </li>
           </ul>
+          <br>
+          <p>From these trends: Properties stay in corporate ownership and rarely return to individuals, and Boston's housing market is losing its individual-owner core.</p>
         {/if}
       </div>
       <div class="story-chart">
@@ -412,17 +392,11 @@
               <strong style="color:#3498db;">Dorchester</strong> lead the
               list.
             </p>
-            <p class="detail">
-              Keep scrolling ↓ to see what the renters in those same
-              neighborhoods actually earn.
-            </p>
+            <p><br>How much do renters in these same neighborhoods earn?</p>
+            <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
+            
           {:else}
-            <p>
-              Now the other half of the picture: the median income of
-              renters in the same three neighborhoods. The people absorbing
-              the steepest rent hikes are often the ones with the least
-              room to absorb them.
-            </p>
+            <p>The people absorbing the steepest rent hikes are often the ones with the least room to absorb them.</p>
           {/if}
         </div>
         <div class="story-chart">
@@ -441,7 +415,7 @@
           {:else if focusIncome.length}
             <div in:fade={{ duration: 380, delay: 100 }} out:fade={{ duration: 220 }} class="income-compare">
               <div class="income-caption">
-                Median household income, by tenure
+                Median household income
               </div>
               {#each focusIncome as row, i}
                 {@const revealed = incomeProgress >= i * 0.05}
@@ -467,7 +441,7 @@
                 </div>
               {/each}
               <div class="income-row boston" class:revealed={bostonBarProgress > 0.05}>
-                <span class="income-name boston-name">Boston<br/>median</span>
+                <span class="income-name boston-name">Boston<br/>Median</span>
                 <div class="income-bar">
                   <div class="owner-fill boston-owner"
                     style="width:{bostonOwnerW * bostonBarProgress}%"></div>
@@ -498,18 +472,13 @@
       <div class="story-text">
         <h1>When Rent Outruns Income</h1>
         <p>
-          Between 2020 and 2024, Massachusetts courts logged
-          <strong>over 6,000 eviction filings</strong> in Boston alone.
-          The most common cause isn't lease violations or property damage —
-          it's simply <em>non-payment of rent</em>.
+          Out of over 6,000 eviction filings filed in Boston between 2020 and 2024, the most common cause of eviction is <em>non-payment of rent</em>.
         </p>
         <p class="detail">
-          As corporate landlords consolidate and rents climb, more tenants
-          fall short on the first of the month. Across the city,
-          <strong>roughly two out of every three eviction cases</strong>
-          cite unpaid rent as the reason, and corporate landlords file the
-          majority of them.
+          As corporate landlords consolidate and rents climb, more tenants fall short on the first of the month.
         </p>
+        <p><br>Who files these evictions?</p>
+        <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
       </div>
       {#if evictionCauseSlices}
         <div class="cause-pie">
@@ -530,19 +499,13 @@
   <div class="story-scroll-step" data-step="6">
     <div class="story-section ovf-section" class:active={scrollStep === 6}>
       <div class="story-text">
-        <h1>Who's Really Filing?</h1>
+        <h1>Who's Filing Evictions?</h1>
         <p>
-          Corporate landlords make up roughly a fifth of Boston's rental ownership.
-          They file the overwhelming majority of its evictions. Normalizing filings
-          to ownership share makes the gap impossible to miss —
-          <strong style="color:#e67e22;">corps file evictions at several times
-          their share of the market</strong>, and individual landlords file well
-          under theirs, every single year.
+          Although corporate entities make up roughly 1/5 of Boston's ownership, they file an overwhelming majority of tenant evictions. By normalizing filings
+          by ownership share, it is apparent that <strong style="color:#e67e22;">corporate landlords file evictions at several times their share of the market</strong>.
         </p>
         <p class="detail">
-          Each row below shows one year: what share of Boston rentals corporations
-          owned vs. what share of evictions they filed. The <strong>ratio</strong>
-          column is how many times above their fair share corps filed that year.
+          Each horizontal bar shows the distribution of ownership and eviction filings for corporate and individual landlords, over each year of available data. The rightmost column displays the filing-to-ownership ratio (FTOR) for corporate landlords.
         </p>
       </div>
       <OwnershipVsFilings
@@ -556,21 +519,11 @@
   <!-- Step 6: CTA -->
   <div class="story-scroll-step" data-step="7">
     <div class="story-section cta-section" class:active={scrollStep === 7}>
-      <h1>Let's Look Closer</h1>
-      <p>
-        The next page is about <strong>eviction</strong> — where it's
-        happening, who's filing it, and who's being pushed out. On the
-        map you're about to see, each
-        <span class="dot-inline blue"></span>
-        <strong class="blue-strong">blue dot</strong> is one eviction filing.
-      </p>
-      <p>
-        We'll take you through <strong>6 neighborhoods</strong> — each
-        with a different story about what investor activity and rising
-        rent mean for the people who live there.
-      </p>
+      <h1>Let's Look Closer.</h1>
+      <p>We'll take you through <strong>6 neighborhoods</strong>, each with a different story. We will use eviction data to show the effect of investor activity on the people who live there.</p>
+      <p>On the maps in the next section, <span class="dot-inline blue"></span> <strong class="blue-strong">dots</strong> represent eviction filings.</p>
       <button class="cta-btn" on:click={() => dispatch('enterDeepDive')}>
-        Explore the Neighborhoods
+        Explore Neighborhoods
       </button>
 
       <div class="cta-footnote">
@@ -694,6 +647,12 @@
     color: #1a1a1a !important;
     line-height: 1.7 !important;
     margin: 0 0 12px !important;
+  }
+  .trust-lede-list {
+    font-size: 1rem !important;
+    color: #1a1a1a !important;
+    line-height: 1.7 !important;
+    margin: 0 0 12px 36px !important;
   }
   .trust-cta {
     font-size: 0.85rem !important;
@@ -857,9 +816,9 @@
   }
   .renter-fill {
     position: absolute;
-    inset: 4px auto 4px 0;
-    height: calc(100% - 8px);
-    border-radius: 8px;
+    inset: 0 auto 0 0;
+    height: 100%;
+    border-radius: 12px;
     transition: width 0.55s cubic-bezier(0.2, 0.9, 0.3, 1);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   }
@@ -911,7 +870,7 @@
   }
   .boston-name { color: #555 !important; font-size: 0.78rem; line-height: 1.1; }
   .boston-renter { background: #2d3748; }
-  .boston-owner { background: #c2cad4; }
+  .boston-owner {}
 
   .flow-section .story-text,
   .flow-section .story-chart {
