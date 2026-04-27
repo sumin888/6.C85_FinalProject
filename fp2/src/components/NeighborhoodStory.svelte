@@ -186,6 +186,10 @@
           />
         {/if}
       {/if}
+      <div class="dot-tip">
+        <span class="dot-tip-icon">👆</span>
+        <span><strong>Click a dot</strong> on the map to explore an individual eviction case.</span>
+      </div>
     </div>
   </div>
 
@@ -502,6 +506,25 @@
     color: #333 !important;
     margin-bottom: 12px;
   }
+  .dot-tip {
+    margin-top: 14px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #eef4ff;
+    border: 1px solid #cdddf7;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    color: #1d3f7a;
+    line-height: 1.4;
+  }
+  .dot-tip-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .dot-tip strong { color: #1a1a1a; font-weight: 700; }
+
   .step-narrative {
     font-size: 0.83rem !important;
     color: #555 !important;

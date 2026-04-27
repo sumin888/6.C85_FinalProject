@@ -74,21 +74,21 @@
         <span class="legend-swatch corporate"></span>
         <span class="legend-label">Corporate landlord</span>
       </div>
+    </div>
 
-      <div class="legend-subtitle">Dot size = cases at location</div>
-      <div class="size-row">
-        <div class="size-cell">
-          <span class="size-swatch" style="width:6px;height:6px;"></span>
-          <span class="size-lbl">1</span>
-        </div>
-        <div class="size-cell">
-          <span class="size-swatch" style="width:10px;height:10px;"></span>
-          <span class="size-lbl">few</span>
-        </div>
-        <div class="size-cell">
-          <span class="size-swatch" style="width:16px;height:16px;"></span>
-          <span class="size-lbl">many</span>
-        </div>
+    <div class="legend-subtitle">Dot size = cases at location</div>
+    <div class="size-row">
+      <div class="size-cell">
+        <span class="size-swatch" style="width:6px;height:6px;"></span>
+        <span class="size-lbl">1</span>
+      </div>
+      <div class="size-cell">
+        <span class="size-swatch" style="width:10px;height:10px;"></span>
+        <span class="size-lbl">few</span>
+      </div>
+      <div class="size-cell">
+        <span class="size-swatch" style="width:16px;height:16px;"></span>
+        <span class="size-lbl">many</span>
       </div>
     </div>
 
@@ -181,7 +181,7 @@
       transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
   }
   .dot-legend-overlay.expanded .extra {
-    max-height: 160px;
+    max-height: 40px;
     opacity: 1;
     transform: translateY(0);
   }

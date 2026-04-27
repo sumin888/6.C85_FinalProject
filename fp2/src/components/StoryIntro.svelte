@@ -482,12 +482,6 @@
                       ${(row.owner ?? 0).toLocaleString()}
                     </span>
                   </span>
-                  <span class="rent-pct-cell">
-                    {#if rentPctOfIncome != null}
-                      <span class="rent-pct-num" style="color:{color}">{rentPctOfIncome.toFixed(0)}%</span>
-                      <span class="rent-pct-lbl">of renter income</span>
-                    {/if}
-                  </span>
                 </div>
               {/each}
               <div class="income-row boston" class:revealed={bostonBarProgress > 0.05}>
@@ -508,12 +502,6 @@
                     ${bostonMedians.owner.toLocaleString()}
                   </span>
                 </span>
-                <span class="rent-pct-cell">
-                  {#if bostonRentPct != null}
-                    <span class="rent-pct-num">{bostonRentPct.toFixed(0)}%</span>
-                    <span class="rent-pct-lbl">of renter income</span>
-                  {/if}
-                </span>
               </div>
 
               <!-- Shared income-axis tick row -->
@@ -528,8 +516,7 @@
                       </div>
                     {/each}
                   </div>
-                  <span class="income-val tick-cap">household income →</span>
-                  <span class="rent-pct-cell tick-cap">rent ÷ income</span>
+                  <span class="income-val tick-cap">household income</span>
                 </div>
               {/if}
             </div>
@@ -844,7 +831,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    width: 720px;
+    width: 580px;
     max-width: 100%;
     padding: 18px 22px;
     background: #fff;
@@ -862,7 +849,7 @@
   }
   .income-row {
     display: grid;
-    grid-template-columns: 110px minmax(0, 1fr) 170px 130px;
+    grid-template-columns: 110px minmax(0, 1fr) 170px;
     gap: 12px;
     align-items: center;
     font-size: 0.88rem;
@@ -1036,11 +1023,12 @@
     white-space: nowrap;
   }
   .tick-cap {
-    font-size: 0.6rem !important;
-    color: #aaa;
+    font-size: 0.62rem !important;
+    color: #888;
     font-style: italic;
-    text-align: left !important;
-    align-items: flex-start !important;
+    text-align: right !important;
+    align-items: flex-end !important;
+    justify-self: end;
   }
   .boston-name { color: #555 !important; font-size: 0.78rem; line-height: 1.1; }
   .boston-renter { background: #2d3748; }
