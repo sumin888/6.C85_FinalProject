@@ -269,7 +269,7 @@
 
   .map-sticky {
     position: sticky; top: 0; height: 100vh; width: 100%;
-    background: #f5f0e8; z-index: 1;
+    background: #F5FDFF; z-index: 1;
   }
 
   .detail-panel {

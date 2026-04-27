@@ -24,7 +24,7 @@
   let camFrom = null, camTo = null, camT = 1;
 
   // ── Colors ────────────────────────────────────────────────────────────────
-  const C_NEUTRAL = new THREE.Color('#4a7fc0');
+  const C_NEUTRAL = new THREE.Color('#2563eb');  // same as individual landlord blue
   const C_CORP    = new THREE.Color('#d97706');
   const C_INDIV   = new THREE.Color('#2563eb');
 
@@ -121,17 +121,21 @@
 
   // ── Neighborhood label sprite ─────────────────────────────────────────────
   function makeLabel(text, { fontSize = 22, color = '#5a5040', alpha = 1 } = {}) {
+    const DPR = 3;  // 3× oversample for sharp retina-quality text
     const cv  = document.createElement('canvas');
     const ctx = cv.getContext('2d');
-    ctx.font  = `600 ${fontSize}px Inter, Arial, sans-serif`;
-    const w   = Math.ceil(ctx.measureText(text).width) + 24;
-    cv.width  = w; cv.height = fontSize + 16;
-    ctx.font  = `600 ${fontSize}px Inter, Arial, sans-serif`;
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle   = color;
+    ctx.font  = `600 ${fontSize * DPR}px Inter, Arial, sans-serif`;
+    const w   = Math.ceil(ctx.measureText(text).width) + 24 * DPR;
+    cv.width  = w;
+    cv.height = (fontSize + 16) * DPR;
+    ctx.font         = `600 ${fontSize * DPR}px Inter, Arial, sans-serif`;
+    ctx.globalAlpha  = alpha;
+    ctx.fillStyle    = color;
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 12, cv.height / 2);
-    const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true });
+    ctx.fillText(text, 12 * DPR, cv.height / 2);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.needsUpdate = true;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
     const sp  = new THREE.Sprite(mat);
     const scale = fontSize * 1.1;
     sp.scale.set(scale * (w / cv.height), scale, 1);
@@ -162,11 +166,11 @@
     for (const feat of geoData.features) {
       if (feat.properties.name === neighborhood) continue;
       try {
-        cityGroup.add(featureToGroup(feat, 0xcec5b0, 0xb0a48a, -0.5));
+        cityGroup.add(featureToGroup(feat, 0xF5EDD8, 0xD4C070, -0.5));
         // Faint neighborhood name
         const [lng, lat] = featureCentroid(feat);
         const [cx, cz]   = proj([lng, lat]);
-        const lbl        = makeLabel(feat.properties.name, { fontSize: 16, color: '#8a7f6e', alpha: 0.6 });
+        const lbl        = makeLabel(feat.properties.name, { fontSize: 16, color: '#9a8840', alpha: 0.65 });
         lbl.position.set(cx, 1, cz);
         cityGroup.add(lbl);
       } catch {}
@@ -178,7 +182,7 @@
       if (activeFeat) {
         const [lng, lat] = featureCentroid(activeFeat);
         const [cx, cz]   = proj([lng, lat]);
-        const lbl        = makeLabel(neighborhood, { fontSize: 26, color: '#3d3328', alpha: 0.85 });
+        const lbl        = makeLabel(neighborhood, { fontSize: 26, color: '#6b5a20', alpha: 0.9 });
         lbl.position.set(cx, 2, cz);
         cityGroup.add(lbl);
       }
@@ -212,7 +216,7 @@
     properties
       .filter(p => p.neighborhood === neighborhood && p.lat && p.lng)
       .forEach(p => {
-        const mat  = new THREE.MeshLambertMaterial({ color: C_NEUTRAL });
+        const mat  = new THREE.MeshLambertMaterial({ color: C_NEUTRAL, transparent: true, opacity: 0.78 });
         const mesh = new THREE.Mesh(geo, mat);
         const [x, z] = proj([p.lng, p.lat]);
         mesh.position.set(x, FLOAT_Y, z);
@@ -252,8 +256,8 @@
         d.mesh.visible    = true;
 
         // Ensure opaque
-        d.mesh.material.transparent = false;
-        d.mesh.material.opacity     = 1;
+        d.mesh.material.transparent = true;
+        d.mesh.material.opacity     = 0.78;
 
         // Color: neutral → corp/individual split at step 2
         d.mesh.material.color.set(
@@ -269,8 +273,8 @@
           d.mesh.material.transparent = true;
           d.mesh.material.opacity     = 0.07;
         } else {
-          d.mesh.material.transparent = false;
-          d.mesh.material.opacity     = 1;
+          d.mesh.material.transparent = true;
+          d.mesh.material.opacity     = 0.78;
           if (!d.falling && !d.landed)
             d.mesh.material.color.set(d.baseColor);   // keep blue/orange
           if (d.willFall && !d.falling && !d.landed)
@@ -339,8 +343,8 @@
     renderer.shadowMap.enabled = true;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf5f0e8);
-    scene.fog        = new THREE.Fog(0xf5f0e8, 900, 1400);
+    scene.background = new THREE.Color(0xF5FDFF);
+    scene.fog        = new THREE.Fog(0xF5FDFF, 900, 1400);
 
     camera = new THREE.PerspectiveCamera(48, w / h, 0.1, 2000);
     camera.position.copy(CAM_OVERHEAD);
@@ -377,7 +381,7 @@
     buildCity();
 
     if (sceneGroup) scene.remove(sceneGroup);
-    sceneGroup = featureToGroup(feat, 0xe2d9c4, 0x9a8f7a, 0);
+    sceneGroup = featureToGroup(feat, 0xFDFBD4, 0xC8B864, 0);
     scene.add(sceneGroup);
 
     buildDots();
