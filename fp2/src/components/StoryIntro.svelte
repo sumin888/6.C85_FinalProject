@@ -123,6 +123,46 @@
   $: bostonBarProgress = Math.min(1, Math.max(0, (incomeProgress - 0.25) / 0.15));
   $: bostonRenterW = focusIncomeMax ? bostonMedians.renter / focusIncomeMax * 100 : 0;
   $: bostonOwnerW = focusIncomeMax ? bostonMedians.owner / focusIncomeMax * 100 : 0;
+  $: bostonAnnualRent = bostonLatestRent ? bostonLatestRent * 12 : null;
+  $: bostonRentLeft = bostonAnnualRent && focusIncomeMax ? (bostonAnnualRent / focusIncomeMax) * 100 : null;
+  $: bostonRentPct = (bostonAnnualRent && bostonMedians.renter)
+    ? (bostonAnnualRent / bostonMedians.renter) * 100 : null;
+
+  // Latest monthly rent per focus neighborhood (last ZORI point ≥ 2016)
+  $: focusLatestRent = (() => {
+    const out = {};
+    if (!zoriData) return out;
+    for (const name of focusHoods) {
+      const series = zoriData[name];
+      if (!Array.isArray(series) || series.length === 0) continue;
+      const valid = series.filter(d => d.date >= '2016-01-01' && d.rent);
+      if (valid.length) out[name] = Math.round(valid[valid.length - 1].rent);
+    }
+    return out;
+  })();
+  // Boston-wide latest median monthly rent — same value the rent line chart
+  // ends on (last point of bostonMedianRent). Falls back to averaging the
+  // latest neighborhood values if that series isn't ready.
+  $: bostonLatestRent = (() => {
+    if (Array.isArray(bostonMedianRent) && bostonMedianRent.length) {
+      return Math.round(bostonMedianRent[bostonMedianRent.length - 1].y);
+    }
+    const vals = Object.values(focusLatestRent);
+    return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+  })();
+
+  // Income-axis ticks: pick a "nice" step so the axis spans 0 → focusIncomeMax.
+  $: incomeTicks = (() => {
+    if (!focusIncomeMax) return [];
+    const target = 3;                 // ~3 intervals → ~4 labels, less crowding
+    const raw = focusIncomeMax / target;
+    const pow10 = Math.pow(10, Math.floor(Math.log10(raw)));
+    const m = raw / pow10;
+    const step = (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * pow10;
+    const ticks = [];
+    for (let v = 0; v <= focusIncomeMax + step * 0.5; v += step) ticks.push(v);
+    return ticks;
+  })();
 
   // ── Prepare chart data ─────────────────────────────────────────────────
   $: corpLines = storyData ? [
@@ -422,6 +462,10 @@
                 {@const color = i === 0 ? '#c0392b' : i === 1 ? '#e67e22' : '#3498db'}
                 {@const ownerW = (row.owner ?? 0) / focusIncomeMax * 100}
                 {@const renterW = (row.renter ?? 0) / focusIncomeMax * 100}
+                {@const monthlyRent = focusLatestRent[row.name]}
+                {@const annualRent = monthlyRent ? monthlyRent * 12 : null}
+                {@const rentMarkerLeft = annualRent ? (annualRent / focusIncomeMax) * 100 : null}
+                {@const rentPctOfIncome = (annualRent && row.renter) ? (annualRent / row.renter) * 100 : null}
                 <div class="income-row" class:revealed>
                   <span class="income-name">{row.name}</span>
                   <div class="income-bar">
@@ -437,6 +481,12 @@
                       <span class="tenure-tag muted">Owner</span>
                       ${(row.owner ?? 0).toLocaleString()}
                     </span>
+                  </span>
+                  <span class="rent-pct-cell">
+                    {#if rentPctOfIncome != null}
+                      <span class="rent-pct-num" style="color:{color}">{rentPctOfIncome.toFixed(0)}%</span>
+                      <span class="rent-pct-lbl">of renter income</span>
+                    {/if}
                   </span>
                 </div>
               {/each}
@@ -458,7 +508,30 @@
                     ${bostonMedians.owner.toLocaleString()}
                   </span>
                 </span>
+                <span class="rent-pct-cell">
+                  {#if bostonRentPct != null}
+                    <span class="rent-pct-num">{bostonRentPct.toFixed(0)}%</span>
+                    <span class="rent-pct-lbl">of renter income</span>
+                  {/if}
+                </span>
               </div>
+
+              <!-- Shared income-axis tick row -->
+              {#if incomeTicks.length}
+                <div class="income-row tick-row">
+                  <span class="income-name"></span>
+                  <div class="tick-axis">
+                    {#each incomeTicks as t}
+                      <div class="tick" style="left:{(t / focusIncomeMax) * 100}%">
+                        <span class="tick-line"></span>
+                        <span class="tick-label">${(t >= 1000 ? Math.round(t / 1000) + 'k' : t)}</span>
+                      </div>
+                    {/each}
+                  </div>
+                  <span class="income-val tick-cap">household income →</span>
+                  <span class="rent-pct-cell tick-cap">rent ÷ income</span>
+                </div>
+              {/if}
             </div>
           {/if}
         </div>
@@ -771,7 +844,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    width: 520px;
+    width: 720px;
     max-width: 100%;
     padding: 18px 22px;
     background: #fff;
@@ -789,7 +862,7 @@
   }
   .income-row {
     display: grid;
-    grid-template-columns: 110px 1fr 170px;
+    grid-template-columns: 110px minmax(0, 1fr) 170px 130px;
     gap: 12px;
     align-items: center;
     font-size: 0.88rem;
@@ -867,6 +940,107 @@
     margin-top: 4px;
     padding-top: 10px;
     border-top: 1px dashed #ddd;
+  }
+
+  .rent-marker {
+    position: absolute;
+    top: -6px;
+    bottom: -6px;
+    width: 2px;
+    background: #1a1a1a;
+    transform: translateX(-1px);
+    z-index: 3;
+    pointer-events: none;
+  }
+  .rent-marker::before,
+  .rent-marker::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    width: 0;
+    height: 0;
+    transform: translateX(-50%);
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+  }
+  .rent-marker::before { top: -1px; border-bottom: 5px solid #1a1a1a; }
+  .rent-marker::after { bottom: -1px; border-top: 5px solid #1a1a1a; }
+  .rent-marker-tip {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 1px 5px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .rent-marker.boston { background: #2d3748; }
+  .rent-marker.boston::before { border-bottom-color: #2d3748; }
+  .rent-marker.boston::after { border-top-color: #2d3748; }
+
+  .rent-pct-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .rent-pct-num {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #1a1a1a;
+  }
+  .rent-pct-lbl {
+    font-size: 0.65rem;
+    color: #888;
+    margin-top: 2px;
+    text-align: right;
+  }
+
+  .income-row.tick-row {
+    opacity: 1 !important;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #eee;
+  }
+  .tick-axis {
+    position: relative;
+    height: 18px;
+  }
+  .tick {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .tick-line {
+    width: 1px;
+    height: 5px;
+    background: #aaa;
+  }
+  .tick-label {
+    margin-top: 1px;
+    font-size: 0.62rem;
+    color: #888;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .tick-cap {
+    font-size: 0.6rem !important;
+    color: #aaa;
+    font-style: italic;
+    text-align: left !important;
+    align-items: flex-start !important;
   }
   .boston-name { color: #555 !important; font-size: 0.78rem; line-height: 1.1; }
   .boston-renter { background: #2d3748; }

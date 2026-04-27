@@ -45,15 +45,39 @@
   let zoomBehavior = null;
   let zoomAttached = false;
 
-  // ── Dot-color mode transition pulse ─────────────────────────────────────
-  // When highlightInvestors flips, briefly dim the canvas so the color
-  // change reads as an intentional animated switch instead of a snap.
+  // ── Subtle corp-dot flash when highlightInvestors switches on ──────────
+  // Only the corporate (orange) dots briefly enlarge + brighten so the
+  // change in coloring reads as an intentional reveal instead of a snap.
+  // No whole-canvas pulse — non-corp dots stay still.
+  const CORP_PULSE_MS = 500;
   let _lastHighlightInvestors = highlightInvestors;
-  let dotPulse = false;
+  let corpPulseStart = 0;
+  let corpPulseRaf = false;
+  function corpPulseFactor() {
+    if (!corpPulseStart) return 0;
+    const t = (performance.now() - corpPulseStart) / CORP_PULSE_MS;
+    if (t >= 1) return 0;
+    // Triangle wave: ramp up to peak at t=0.35, decay back to 0 by t=1.
+    return t < 0.35 ? t / 0.35 : (1 - t) / 0.65;
+  }
+  function tickCorpPulse() {
+    drawDots();
+    if (corpPulseStart && performance.now() - corpPulseStart < CORP_PULSE_MS) {
+      requestAnimationFrame(tickCorpPulse);
+    } else {
+      corpPulseStart = 0;
+      corpPulseRaf = false;
+    }
+  }
   $: if (highlightInvestors !== _lastHighlightInvestors) {
     _lastHighlightInvestors = highlightInvestors;
-    dotPulse = true;
-    setTimeout(() => { dotPulse = false; }, 380);
+    if (highlightInvestors) {
+      corpPulseStart = performance.now();
+      if (!corpPulseRaf) {
+        corpPulseRaf = true;
+        requestAnimationFrame(tickCorpPulse);
+      }
+    }
   }
 
   // ── Tooltip + selected neighborhood state ─────────────────────────────────
@@ -65,6 +89,73 @@
   $: filteredDots = dots ? filterEvictionDots(dots, maxRent, { useCurrentRent, maxYear }) : [];
   $: dotColorScale = makeDotColorScale(maxRent);
   $: corpColorScale = makeEvictionColorScale(maxRent); // red for corporate landlord
+
+  // ── Exit animation: dots that drop off the screen when filters change ─────
+  const EXIT_DURATION = 600;        // ms total animation
+  const EXIT_DROP_PX = 90;          // distance a dot falls before vanishing
+  const EXIT_MAX = 600;             // cap concurrent exiting dots for perf
+  let exiting = [];                 // [{x, y, r, color, alpha, startTime}]
+  let exitRafActive = false;
+  let prevFilteredDots = null;
+
+  function dotIdentity(d) {
+    return `${d.lat},${d.lng},${d.file_date ?? ''},${d.case_type ?? ''}`;
+  }
+
+  function colorFor(d) {
+    if (darkColorMode) {
+      return d.corp_landlord
+        ? (highlightInvestors ? '#e67e22' : '#2563eb')
+        : '#2563eb';
+    }
+    if (highlightInvestors && d.corp_landlord) return corpColorScale(d.rent_now ?? d.rent_at_filing ?? 0);
+    return dotColorScale(d.rent_now ?? d.rent_at_filing ?? 0);
+  }
+
+  function detectExits(prev, curr) {
+    if (!projection || !prev || prev.length === 0) return;
+    const currentIds = new Set();
+    for (const d of curr) currentIds.add(dotIdentity(d));
+    const now = performance.now();
+    const r = 1.8 + zoomProgress * 1.1;
+    // Same focus geometry as drawDots uses for its inside/outside coloring.
+    const focusFeature = (dimOtherNeighborhoods && focusNeighborhood && geoData)
+      ? geoData.features.find(f => f.properties.name === focusNeighborhood)
+      : null;
+    let added = 0;
+    for (const d of prev) {
+      if (currentIds.has(dotIdentity(d))) continue;
+      const [px, py] = projection([d.lng, d.lat]);
+      if (px < -10 || px > width + 10 || py < -10 || py > height + 10) continue;
+      const insideFocus = !focusFeature || d3.geoContains(focusFeature, [d.lng, d.lat]);
+      // Match the on-map look: outside-focus dots are gray at low alpha,
+      // inside-focus dots use their proper color at full alpha.
+      const color = insideFocus ? colorFor(d) : '#c8c8c8';
+      const alpha = insideFocus ? 0.85 : 0.35;
+      exiting.push({ x: px, y: py, r, color, alpha, startTime: now });
+      if (++added > EXIT_MAX) break;
+    }
+    if (exiting.length > EXIT_MAX) exiting = exiting.slice(-EXIT_MAX);
+    if (exiting.length && !exitRafActive) {
+      exitRafActive = true;
+      requestAnimationFrame(animateExits);
+    }
+  }
+
+  function animateExits() {
+    drawDots();
+    if (exiting.length) {
+      requestAnimationFrame(animateExits);
+    } else {
+      exitRafActive = false;
+    }
+  }
+
+  // Trigger exit detection only when the filter set itself changes
+  $: if (filteredDots !== prevFilteredDots) {
+    if (prevFilteredDots) detectExits(prevFilteredDots, filteredDots);
+    prevFilteredDots = filteredDots;
+  }
 
   // ── Neighborhood counts (for tooltip + parent binding) ─────────────────────
   export let affordableByNeighborhood = {};
@@ -242,31 +333,37 @@
     ctx.globalAlpha = 0.75;
     // Two-pass draw: outside-focus dots first (faint gray, low alpha), then
     // focus-neighborhood dots on top so they read clearly.
+    const pulse = corpPulseFactor();   // 0 unless we're in the corp-flash window
     const drawPass = (onlyOutside) => {
       for (const dot of grid.values()) {
         const outside = dot.insideCount === 0;
         if (onlyOutside !== outside) continue;
         const avgRent = dot.totalRent / dot.count;
-        const r = dot.count === 1 ? baseRadius : baseRadius + Math.min(Math.sqrt(dot.count) * 0.9, 8);
+        let r = dot.count === 1 ? baseRadius : baseRadius + Math.min(Math.sqrt(dot.count) * 0.9, 8);
+        const corpRatio = dot.corpCount / dot.count;
+        const isCorp = corpRatio > 0.5;
         if (outside) {
           ctx.fillStyle = '#c8c8c8';
           ctx.globalAlpha = 0.35;
         } else {
-          const corpRatio = dot.corpCount / dot.count;
           if (darkColorMode) {
-            // With highlightInvestors off, everything reads as an eviction
-            // case in blue. With it on, split by landlord type.
             if (highlightInvestors) {
-              ctx.fillStyle = corpRatio > 0.5 ? '#e67e22' : '#2563eb';
+              ctx.fillStyle = isCorp ? '#e67e22' : '#2563eb';
             } else {
               ctx.fillStyle = '#2563eb';
             }
-          } else if (highlightInvestors && corpRatio > 0.5) {
+          } else if (highlightInvestors && isCorp) {
             ctx.fillStyle = corpColorScale(avgRent);
           } else {
             ctx.fillStyle = dotColorScale(avgRent);
           }
           ctx.globalAlpha = 0.75;
+          // Subtle pulse: only inside-focus, only corporate dots, only
+          // during the highlightInvestors transition window.
+          if (pulse > 0 && highlightInvestors && isCorp) {
+            r *= 1 + 0.35 * pulse;          // up to +35% radius at peak
+            ctx.globalAlpha = Math.min(1, 0.75 + 0.2 * pulse);
+          }
         }
         ctx.beginPath();
         ctx.arc(dot.x, dot.y, r, 0, Math.PI * 2);
@@ -276,6 +373,29 @@
     drawPass(true);
     drawPass(false);
     ctx.globalAlpha = 1.0;
+
+    // Exiting dots: gravity-style fall + fade. Easing is quadratic (t²) so
+    // they accelerate downward like real falling, slow at the start. Done
+    // dots are removed in-place; whatever survives is left for the next frame.
+    if (exiting.length) {
+      const now = performance.now();
+      for (let i = exiting.length - 1; i >= 0; i--) {
+        const e = exiting[i];
+        const t = (now - e.startTime) / EXIT_DURATION;
+        if (t >= 1) {
+          exiting.splice(i, 1);
+          continue;
+        }
+        const ease = t * t;
+        const yOff = ease * EXIT_DROP_PX;
+        ctx.globalAlpha = e.alpha * (1 - t);
+        ctx.fillStyle = e.color;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y + yOff, e.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
 
     // Highlight the clicked dot: stroke directly on its circumference
     if (selectedDotLoc) {
@@ -479,7 +599,6 @@
     <canvas
       bind:this={canvasEl}
       class="dots-canvas clickable"
-      class:pulse={dotPulse}
       style="width:{width}px; height:{height}px;"
       on:click={handleCanvasClick}
     ></canvas>
@@ -639,12 +758,6 @@
   .dots-canvas.clickable {
     pointer-events: auto;
     cursor: crosshair;
-  }
-  .dots-canvas { transition: opacity 0.26s ease; }
-  .dots-canvas.pulse {
-    opacity: 0.25;
-    filter: blur(2px);
-    transition: opacity 0.16s ease, filter 0.16s ease;
   }
 
   .labels-svg {
