@@ -98,6 +98,11 @@
 
       <div class="ref-acknowledgement">
         <span class="ack-label">Acknowledgement</span>
+        This project was developed with guidance and feedback from the
+        <a class="ack-link" href="https://www.mapc.org" target="_blank" rel="noopener">Metropolitan Area Planning Commission (MAPC)</a>.
+      </div>
+      <div class="ref-acknowledgement">
+        <span class="ack-label">Tooling</span>
         Built with the help of <strong>Claude Code</strong> (Anthropic) for
         UX iteration, visualization design, and front-end implementation.
       </div>
@@ -222,4 +227,11 @@
     margin-bottom: 4px;
   }
   .ref-acknowledgement strong { color: #1a1a1a; }
+  .ref-acknowledgement + .ref-acknowledgement { margin-top: 10px; }
+  .ack-link {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .ack-link:hover { text-decoration: underline; }
 </style>
