@@ -21,6 +21,10 @@
 
   // Exposed so the parent can render a contextual legend overlay
   export let scrollStep = 0;
+  // Bound out: fractional zoom progress (0 = full Boston map, 1 = zoomed
+  // into this neighborhood). Driven by scroll within the intro → eviction
+  // transition.
+  export let mapZoomProgress = 0;
   // Opens the global References modal
   export let openReferences = () => {};
   let panelEl;
@@ -93,12 +97,12 @@
   ] : [];
 
   // Drive map state from scroll step
-  // 0=neighborhood overview, 1=general eviction (all green), 2=corp ownership+filing (red),
-  // 3=rent above market, 4=what's left
+  // 0=neighborhood history, 1=today's numbers + budget tip, 2=general eviction,
+  // 3=corp ownership+filing, 4=rent above market, 5=what's left
   $: {
     mapMaxYear = 2022;
-    mapUseCurrentRent = scrollStep >= 3;
-    mapHighlightInvestors = scrollStep >= 2;  // turn dots red (corp) at step 2
+    mapUseCurrentRent = scrollStep >= 4;
+    mapHighlightInvestors = scrollStep >= 3;  // turn dots orange (corp) at step 3
     mapHighlightEvictions = false;
   }
 
@@ -119,6 +123,13 @@
         }
       }
       scrollStep = active;
+
+      // Map zoom progress: ramp from 0 → 1 over the first card's height, so
+      // by the time the user reaches the eviction (step 1) card the map has
+      // fully zoomed into the focus neighborhood.
+      const step0H = steps[0]?.offsetHeight ?? 1;
+      const ZOOM_END = step0H * 0.9;
+      mapZoomProgress = Math.max(0, Math.min(1, panelEl.scrollTop / ZOOM_END));
     }
 
     panelEl.addEventListener('scroll', onScroll, { passive: true });
@@ -128,6 +139,7 @@
 
   $: if (neighborhood && panelEl) {
     scrollStep = 0;
+    mapZoomProgress = 0;
     panelEl.scrollTop = 0;
     tick().then(setupScroll);
   }
@@ -138,11 +150,20 @@
 </script>
 
 <div class="story-panel" bind:this={panelEl}>
-  <!-- Step 0: Neighborhood overview -->
+  <!-- Step 0: Neighborhood history / overview -->
   <div class="story-step" data-step="0">
     <div class="story-card" class:active={scrollStep === 0}>
       <h3>{neighborhood}</h3>
-      <div class="overview-meta">
+      <p>{@html story.overview ?? ''}</p>
+      <div class="scroll-hint">Keep scrolling ↓</div>
+    </div>
+  </div>
+
+  <!-- Step 1: Today's numbers + budget slider prompt -->
+  <div class="story-step" data-step="1">
+    <div class="story-card" class:active={scrollStep === 1}>
+      <h3>{neighborhood} Today</h3>
+      <div class="overview-meta plain">
         {#if sp.median_rent}
           <div class="meta-item">
             <span class="meta-num">${sp.median_rent.toLocaleString()}</span>
@@ -156,14 +177,24 @@
           </div>
         {/if}
       </div>
-      <p>{@html story.overview ?? ''}</p>
-      <div class="scroll-hint">Keep scrolling ↓</div>
+      <div class="budget-tip">
+        <span class="budget-tip-icon">↑</span>
+        <span>
+          <strong>Try the budget slider above</strong> to see how affordability
+          shifts in {neighborhood} as you change what you can pay each month.
+        </span>
+      </div>
+      <p class="estimate-caveat">
+        <strong>Note:</strong> Per-unit rents we'll show later are <em>estimates</em>,
+        not pulled from actual leases — they're interpolated using <strong>ZORI</strong>,
+        Zillow's Observed Rent Index, which tracks market rent over time.
+      </p>
     </div>
   </div>
 
-  <!-- Step 1: General eviction — headline stats + cause breakdown -->
-  <div class="story-step" data-step="1">
-    <div class="story-card" class:active={scrollStep === 1}>
+  <!-- Step 2: General eviction — headline stats + cause breakdown -->
+  <div class="story-step" data-step="2">
+    <div class="story-card" class:active={scrollStep === 2}>
       <h3>Eviction in {neighborhood}</h3>
       <p class="step-narrative">
         Every dot on the map you're looking at is a real eviction case
@@ -193,9 +224,9 @@
     </div>
   </div>
 
-  <!-- Step 2: Corporate ownership → corporate filings -->
-  <div class="story-step" data-step="2">
-    <div class="story-card" class:active={scrollStep === 2}>
+  <!-- Step 3: Corporate ownership → corporate filings -->
+  <div class="story-step" data-step="3">
+    <div class="story-card" class:active={scrollStep === 3}>
       <h3>Who's Filing These?</h3>
       <p class="lede">
         Dots now <span class="inline-dot orange"></span> <strong class="orange-txt">orange</strong>
@@ -252,9 +283,9 @@
     </div>
   </div>
 
-  <!-- Step 3: Rent rising above the market — driven by corporate owners -->
-  <div class="story-step" data-step="3">
-    <div class="story-card" class:active={scrollStep === 3}>
+  <!-- Step 4: Rent rising above the market — driven by corporate owners -->
+  <div class="story-step" data-step="4">
+    <div class="story-card" class:active={scrollStep === 4}>
       <h3>The Rent Behind the Filings</h3>
       <p class="step-narrative">
         Eviction filings rarely come out of nowhere — they follow rent.
@@ -307,14 +338,14 @@
     </div>
   </div>
 
-  <!-- Step 4: What's left — affordability at the user's budget -->
-  <div class="story-step" data-step="4">
-    <div class="story-card" class:active={scrollStep === 4}>
+  <!-- Step 5: What's left — affordability at the user's budget -->
+  <div class="story-step" data-step="5">
+    <div class="story-card" class:active={scrollStep === 5}>
       <h3>What's Left in {neighborhood}?</h3>
       <p class="step-narrative">
-        Take the rent slider at the top and try a budget — see how many
-        rentals in {neighborhood} actually sit within reach today versus
-        five years ago.
+        Slide the rent slider at the top again and watch the numbers shift —
+        see how many rentals in {neighborhood} actually sit within reach
+        today versus five years ago.
       </p>
       <p class="lede">
         At your budget of <strong>${maxRent.toLocaleString()}/mo</strong>:
@@ -519,6 +550,54 @@
     color: #1d3f7a;
     line-height: 1.4;
   }
+  .dot-tip.combined {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .dot-tip.combined .tip-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .dot-tip.combined .tip-line + .tip-line {
+    padding-top: 8px;
+    border-top: 1px solid #cdddf7;
+  }
+  .budget-tip {
+    margin-top: 14px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: #f4faf4;
+    border: 1px solid #d4ead4;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    color: #1d4f1d;
+    line-height: 1.4;
+  }
+  .budget-tip-icon {
+    font-size: 1rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: #2d8c2d;
+    line-height: 1.2;
+  }
+  .budget-tip strong { color: #1a1a1a; font-weight: 700; }
+
+  .estimate-caveat {
+    margin-top: 12px;
+    padding: 9px 12px;
+    background: #fafafa;
+    border-left: 3px solid #bbb;
+    border-radius: 4px;
+    font-size: 0.74rem !important;
+    color: #555 !important;
+    line-height: 1.5 !important;
+  }
+  .estimate-caveat strong { color: #1a1a1a !important; font-weight: 700; }
+  .estimate-caveat em { color: #444; font-style: italic; font-weight: 600; }
   .dot-tip-icon {
     font-size: 1rem;
     flex-shrink: 0;
@@ -707,6 +786,14 @@
     background: #f7f9f7;
     border: 1px solid #e4ebe4;
     border-radius: 8px;
+  }
+  .overview-meta.plain {
+    padding: 6px 0 10px;
+    margin: 4px 0 14px;
+    background: none;
+    border: none;
+    border-radius: 0;
+    gap: 28px;
   }
   .meta-item {
     display: flex;

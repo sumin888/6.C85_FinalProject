@@ -7,6 +7,8 @@
   import FlowDiagram from './FlowDiagram.svelte';
   import OwnershipVsFilings from './OwnershipVsFilings.svelte';
   import DonutChart from './DonutChart.svelte';
+  import CorpOwnershipMap from './CorpOwnershipMap.svelte';
+
 
   const dispatch = createEventDispatcher();
 
@@ -14,6 +16,7 @@
   export let zoriData;    // zori_by_neighborhood.json
   export let evictionDots = [];  // eviction case dots, for per-year aggregation
   export let geoData;     // neighborhoods.geojson (for median income)
+  export let properties = [];    // property sale records (for corporate-ownership map dots)
 
   let scrollStep = 0;
   let stepProgresses = [0, 0, 0, 0, 0, 0, 0, 0]; // per-step scroll progress 0–1
@@ -74,12 +77,23 @@
   })();
 
   // ── Eviction-cause donut data (citywide, computed from evictionDots) ──
+  // Map raw legal-jargon case types to plain-language labels readers can grok
+  // at a glance. "Cause" / "No Cause" are court terms — readers shouldn't
+  // need a glossary to read this chart.
+  const CASE_TYPE_LABEL = {
+    'Non-payment of Rent': 'Missed rent',
+    'Cause': 'Lease violation',
+    'No Cause': 'Landlord ended lease',
+    'SP Transfer- No Cause': 'Landlord ended lease',
+    'Foreclosure': 'Foreclosure',
+  };
   $: evictionCauseSlices = (() => {
     if (!Array.isArray(evictionDots) || evictionDots.length === 0) return null;
     const counts = new Map();
     for (const d of evictionDots) {
-      const c = (d.case_type || 'Other').trim();
-      counts.set(c, (counts.get(c) || 0) + 1);
+      const raw = (d.case_type || 'Other').trim();
+      const label = CASE_TYPE_LABEL[raw] || raw;
+      counts.set(label, (counts.get(label) || 0) + 1);
     }
     const total = [...counts.values()].reduce((a, b) => a + b, 0);
     const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -229,8 +243,8 @@
   $: rentLines = zoriData ? [
     ...[
       { label: 'Mission Hill', color: '#c0392b', hood: 'Mission Hill' },
-      { label: 'Roxbury', color: '#e67e22', hood: 'Roxbury' },
-      { label: 'Dorchester', color: '#3498db', hood: 'Dorchester' },
+      { label: 'Roxbury', color: '#8e44ad', hood: 'Roxbury' },
+      { label: 'Dorchester', color: '#16a085', hood: 'Dorchester' },
     ].filter(l => zoriData[l.hood]).map(l => ({
       label: l.label,
       color: l.color,
@@ -287,7 +301,70 @@
 <div class="story-intro">
   <!-- Step 0: Hero — what's this all about -->
   <div class="story-scroll-step" data-step="0">
+    <div class="project-credit" aria-label="Project credits">
+      <div class="pc-course">6.C85</div>
+      <div class="pc-team">Arvind's Angels</div>
+      <div class="pc-members">Alex Tung · Nuri Hong · Sumin Byun</div>
+    </div>
     <div class="story-section hero-section" class:active={scrollStep === 0}>
+      <svg
+        class="hero-skyline"
+        viewBox="0 0 1400 280"
+        preserveAspectRatio="xMidYEnd slice"
+        aria-hidden="true"
+      >
+        <g class="skyline-shapes">
+          <!-- Low warehouses on the left -->
+          <rect x="0" y="210" width="70" height="70" />
+          <rect x="70" y="190" width="60" height="90" />
+          <rect x="130" y="170" width="50" height="110" />
+
+          <!-- Mid-rise office cluster -->
+          <rect x="180" y="150" width="80" height="130" />
+          <rect x="260" y="135" width="60" height="145" />
+          <line x1="290" y1="135" x2="290" y2="105" stroke-width="2" />
+
+          <!-- Custom House Tower with pyramid spire and clock face -->
+          <rect x="345" y="95" width="46" height="185" />
+          <polygon points="335,95 368,55 401,95" />
+          <line x1="368" y1="55" x2="368" y2="35" stroke-width="2" />
+          <circle cx="368" cy="125" r="6" />
+
+          <!-- Step buildings -->
+          <rect x="410" y="160" width="70" height="120" />
+          <rect x="425" y="135" width="40" height="30" />
+          <rect x="490" y="175" width="60" height="105" />
+          <rect x="555" y="150" width="80" height="130" />
+
+          <!-- Prudential Tower with rooftop antenna -->
+          <rect x="650" y="55" width="64" height="225" />
+          <rect x="660" y="40" width="44" height="20" />
+          <line x1="682" y1="40" x2="682" y2="5" stroke-width="2" />
+
+          <!-- Cluster between Pru and Hancock -->
+          <rect x="725" y="140" width="56" height="140" />
+          <rect x="785" y="120" width="44" height="160" />
+
+          <!-- 200 Clarendon (Hancock) — tall slab -->
+          <rect x="840" y="30" width="78" height="250" />
+
+          <!-- Financial district mid-rises -->
+          <rect x="930" y="115" width="58" height="165" />
+          <rect x="990" y="145" width="48" height="135" />
+          <rect x="1040" y="100" width="66" height="180" />
+          <rect x="1055" y="80" width="36" height="22" />
+          <rect x="1110" y="135" width="60" height="145" />
+
+          <!-- Brutalist Government Center boxes -->
+          <rect x="1175" y="170" width="74" height="110" />
+          <rect x="1195" y="155" width="34" height="18" />
+
+          <!-- Harbor warehouses -->
+          <rect x="1255" y="195" width="50" height="85" />
+          <rect x="1310" y="210" width="45" height="70" />
+          <rect x="1360" y="220" width="40" height="60" />
+        </g>
+      </svg>
       <div class="hero-inner">
         <h1 class="hero-title">Things are changing<br/>rapidly in Boston.</h1>
         <p class="hero-lede">Large-scale investors are buying up housing, and rent is rising beyond renters' incomes. All the while, evictions are piling up in some neighborhoods more than others.</p>
@@ -297,129 +374,127 @@
     </div>
   </div>
 
-  <!-- Step 1: A short, trust-building note about the data -->
-  <div class="story-scroll-step" data-step="1">
-    <div class="story-section trust-section" class:active={scrollStep === 1}>
-      <div class="trust-card">
-        <div class="trust-eyebrow">Sources of data</div>
-        <p class="trust-lede">
-          All content in this visualization is built from sources that are <strong style="color:slategray">authoritative</strong> and
-          <strong style="color:slategray">representative</strong>:</p>
-          <ul class="trust-lede-list">
-            <li>Metro Boston property sales</li>
-            <li>MA Trial Court eviction filings</li>
-            <li>City of Boston assessment rolls</li>
-            <li>Zillow observed rent index (ZORI)</li>
-            <li>US Census tract geometry</li>
-          </ul>
-        <p class="trust-cta">
-          More information and links to these datasets can be found at the bottom of this section.
-        </p>
-        <div class="trust-arrow" aria-hidden="true">↓ Continue</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Step 2: Boston's Corporate Takeover — ownership trend -->
-  <div class="story-scroll-step" data-step="2">
-    <div class="story-section" class:active={scrollStep === 2}>
-      <div class="story-text">
-        <h1>Boston's Corporate Takeover</h1>
-        <p>
-          From 2004 to 2024, Corporate ownership has risen 5x, from <strong style="color:#e67e22;">5%</strong> to <strong style="color:#e67e22;">25%</strong>. Meanwhile, owner-occupancy has declined from <strong style="color:#2563eb;"> 43%</strong> to <strong style="color:#2563eb;">38%</strong>.
-        </p>
-        <p class="detail">
-          <strong style="color:#888;">Why is this concerning?</strong> Corporate owners prioritize the maximization of profit: This is best accomplished by favoring short-term leases over long-term tenants.
-        </p>
-        <p><br>How are corporate owners steadily acquiring properties?</p>
-        <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
-      </div>
-      <div class="story-chart">
-        <AnimatedLineChart
-          lines={corpLines}
-          progress={scrollStep >= 2 ? Math.max(stepProgresses[2], scrollStep > 2 ? 1 : 0) : 0}
-          yFormat={v => (v * 100).toFixed(0) + '%'}
-          xFormat={v => String(Math.round(v))}
-          yLabel="Rate"
-          width={520}
-          height={300}
-        />
+  <div class="story-scroll-step tall" data-step="2">
+    <div class="sticky-wrap">
+      <div class="story-section corp-section" class:active={scrollStep === 2}>
+        <div class="story-text corp-intro">
+          <h1>Boston's Corporate Takeover</h1>
+          <p>
+            From 2004 to 2024, Corporate ownership has risen 5x, from <strong style="color:#e67e22;">5%</strong> to <strong style="color:#e67e22;">25%</strong>. Meanwhile, owner-occupancy has declined from <strong style="color:#2563eb;"> 43%</strong> to <strong style="color:#2563eb;">38%</strong>.
+          </p>
+          <p class="detail">
+            <strong style="color:#888;">Why is this concerning?</strong> Corporate owners prioritize the maximization of profit: This is best accomplished by favoring short-term leases over long-term tenants.
+          </p>
+        </div>
+        <div class="corp-vis-row">
+          <div class="story-chart">
+            <AnimatedLineChart
+              lines={corpLines}
+              progress={scrollStep >= 2 ? Math.max(stepProgresses[2], scrollStep > 2 ? 1 : 0) : 0}
+              yFormat={v => (v * 100).toFixed(0) + '%'}
+              xFormat={v => String(Math.round(v))}
+              yLabel="Rate"
+              width={500}
+              height={300}
+            />
+          </div>
+          <div class="story-chart">
+            <CorpOwnershipMap
+              {geoData}
+              {properties}
+              corpRates={storyData?.citywide?.corp_ownership ?? []}
+              progress={scrollStep >= 2 ? Math.max(stepProgresses[2], scrollStep > 2 ? 1 : 0) : 0}
+              width={360}
+              height={300}
+            />
+          </div>
+        </div>
+        <p class="corp-prompt">How are corporate owners steadily acquiring properties?</p>
+        <div class="hero-arrow corp-arrow" aria-hidden="true">↓ Scroll on</div>
       </div>
     </div>
   </div>
 
   <!-- Step 2: Who's Buying — Sankey-style flow diagram -->
-  <div class="story-scroll-step" data-step="3">
+  <div class="story-scroll-step tall" data-step="3">
+    <div class="sticky-wrap">
     <div class="story-section flow-section" class:active={scrollStep === 3}>
-      <div class="story-text">
+      <div class="flow-intro">
         <h1>Who's Buying?</h1>
         <p>
           Every property sale in Boston flows between two classes:
           <strong style="color:#2563eb;">individual owners</strong> and
           <strong style="color:#e67e22;">corporate entities</strong>.
+          Properties stay in corporate ownership and rarely return to individuals,
+          and Boston's housing market is losing its individual-owner core.
         </p>
-        {#if saleFlowDiagram}
-          {@const b = saleFlowDiagram.baseline}
-          {@const n = saleFlowDiagram.latest}
-          <ul class="flow-list">
-            <li>
-              <div class="fl-head">
-                <span class="fl-name" style="color:#e67e22;">Individual-to-Corporate</span>
-                <span class="fl-val">{(b.ind_to_corp * 100).toFixed(1)}% → <strong>{(n.ind_to_corp * 100).toFixed(1)}%</strong> ▲</span>
-              </div>
-              <div class="fl-implication">
-                Family-owned homes are being <strong>sold to corporate buyers</strong> at 5x the rate of two decades ago.
-              </div>
-            </li>
-            <li>
-              <div class="fl-head">
-                <span class="fl-name" style="color:#e67e22;">Corporate-to-Corporate</span>
-                <span class="fl-val">{(b.corp_to_corp * 100).toFixed(1)}% → <strong>{(n.corp_to_corp * 100).toFixed(1)}%</strong> ▲</span>
-              </div>
-              <div class="fl-implication">
-                Sales from corporate owners tend to be made <strong>to other corporate entities</strong>.
-              </div>
-            </li>
-            <li>
-              <div class="fl-head">
-                <span class="fl-name" style="color:#2563eb;">Corporate-to-Individual</span>
-                <span class="fl-val">{(b.corp_to_ind * 100).toFixed(1)}% → <strong>{(n.corp_to_ind * 100).toFixed(1)}%</strong> ▼</span>
-              </div>
-              <div class="fl-implication">
-                While some properties return to individual landlords, this percentage is slowly decreasing.
-              </div>
-            </li>
-            <li>
-              <div class="fl-head">
-                <span class="fl-name" style="color:#2563eb;">Individual-to-Individual</span>
-                <span class="fl-val">{(b.ind_to_ind * 100).toFixed(1)}% → <strong>{(n.ind_to_ind * 100).toFixed(1)}%</strong> ▼</span>
-              </div>
-              <div class="fl-implication">
-                Traditional "family-to-family sales" are decreasing over time.
-              </div>
-            </li>
-          </ul>
-          <br>
-          <p>From these trends: Properties stay in corporate ownership and rarely return to individuals, and Boston's housing market is losing its individual-owner core.</p>
-        {/if}
       </div>
-      <div class="story-chart">
-        {#if saleFlowDiagram}
-          <FlowDiagram
-            baseline={saleFlowDiagram.baseline}
-            latest={saleFlowDiagram.latest}
-            baselineYear={saleFlowDiagram.baselineYear}
-            latestYear={saleFlowDiagram.latestYear}
-            progress={scrollStep >= 3 ? Math.max(stepProgresses[3], scrollStep > 3 ? 1 : 0) : 0}
-          />
-        {/if}
-      </div>
+      {#if saleFlowDiagram}
+        {@const b = saleFlowDiagram.baseline}
+        {@const n = saleFlowDiagram.latest}
+        <div class="flow-with-stats">
+          <div class="flow-chart-wrap">
+            <FlowDiagram
+              baseline={saleFlowDiagram.baseline}
+              latest={saleFlowDiagram.latest}
+              baselineYear={saleFlowDiagram.baselineYear}
+              latestYear={saleFlowDiagram.latestYear}
+              progress={scrollStep >= 3 ? Math.max(stepProgresses[3], scrollStep > 3 ? 1 : 0) : 0}
+            />
+          </div>
+          <div class="flow-stats">
+            <ul class="flow-stat-group flow-stat-top">
+              <li class="flow-stat">
+                <div class="fl-head">
+                  <span class="fl-name"><span class="gray">Individual-to-</span><span class="corp">Corporate</span></span>
+                  <span class="fl-val">{(b.ind_to_corp * 100).toFixed(1)}% → <strong>{(n.ind_to_corp * 100).toFixed(1)}%</strong> ▲</span>
+                </div>
+                <div class="fl-implication">
+                  Family-owned homes are being <strong>sold to corporate buyers</strong> at 5x the rate of two decades ago.
+                </div>
+              </li>
+              <li class="flow-stat">
+                <div class="fl-head">
+                  <span class="fl-name"><span class="gray">Corporate-to-</span><span class="corp">Corporate</span></span>
+                  <span class="fl-val">{(b.corp_to_corp * 100).toFixed(1)}% → <strong>{(n.corp_to_corp * 100).toFixed(1)}%</strong> ▲</span>
+                </div>
+                <div class="fl-implication">
+                  Sales from corporate owners tend to be made <strong>to other corporate entities</strong>.
+                </div>
+              </li>
+            </ul>
+            <ul class="flow-stat-group flow-stat-bot">
+              <li class="flow-stat">
+                <div class="fl-head">
+                  <span class="fl-name"><span class="gray">Corporate-to-</span><span class="ind">Individual</span></span>
+                  <span class="fl-val">{(b.corp_to_ind * 100).toFixed(1)}% → <strong>{(n.corp_to_ind * 100).toFixed(1)}%</strong> ▼</span>
+                </div>
+                <div class="fl-implication">
+                  While some properties return to individual landlords, this percentage is slowly decreasing.
+                </div>
+              </li>
+              <li class="flow-stat">
+                <div class="fl-head">
+                  <span class="fl-name"><span class="gray">Individual-to-</span><span class="ind">Individual</span></span>
+                  <span class="fl-val">{(b.ind_to_ind * 100).toFixed(1)}% → <strong>{(n.ind_to_ind * 100).toFixed(1)}%</strong> ▼</span>
+                </div>
+                <div class="fl-implication">
+                  Traditional "family-to-family sales" are decreasing over time.
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="hero-arrow flow-arrow" aria-hidden="true">↓ Scroll on</div>
+      {/if}
+    </div>
     </div>
   </div>
 
   <!-- Step 3: The Price You Pay — sub-scroll between rent and income views -->
   <div class="story-scroll-step tall" data-step="4">
-    <div class="price-sticky">
+    <div class="sticky-wrap">
       <div class="story-section" class:active={scrollStep === 4}>
         <div class="story-text">
           <h1>The Price You Pay</h1>
@@ -428,8 +503,8 @@
               As corporate ownership rises, so do rents. The sharpest climbs
               cluster in just a few neighborhoods —
               <strong style="color:#c0392b;">Mission Hill</strong>,
-              <strong style="color:#e67e22;">Roxbury</strong>, and
-              <strong style="color:#3498db;">Dorchester</strong> lead the
+              <strong style="color:#8e44ad;">Roxbury</strong>, and
+              <strong style="color:#16a085;">Dorchester</strong> lead the
               list.
             </p>
             <p><br>How much do renters in these same neighborhoods earn?</p>
@@ -459,7 +534,7 @@
               </div>
               {#each focusIncome as row, i}
                 {@const revealed = incomeProgress >= i * 0.05}
-                {@const color = i === 0 ? '#c0392b' : i === 1 ? '#e67e22' : '#3498db'}
+                {@const color = i === 0 ? '#c0392b' : i === 1 ? '#8e44ad' : '#16a085'}
                 {@const ownerW = (row.owner ?? 0) / focusIncomeMax * 100}
                 {@const renterW = (row.renter ?? 0) / focusIncomeMax * 100}
                 {@const monthlyRent = focusLatestRent[row.name]}
@@ -527,52 +602,65 @@
   </div>
 
   <!-- Step 4: When Rent Outruns Income — Evictions -->
-  <div class="story-scroll-step" data-step="5">
-    <div class="story-section eviction-section" class:active={scrollStep === 5}>
-      <div class="story-text">
-        <h1>When Rent Outruns Income</h1>
-        <p>
-          Out of over 6,000 eviction filings filed in Boston between 2020 and 2024, the most common cause of eviction is <em>non-payment of rent</em>.
-        </p>
-        <p class="detail">
-          As corporate landlords consolidate and rents climb, more tenants fall short on the first of the month.
-        </p>
-        <p><br>Who files these evictions?</p>
-        <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
-      </div>
-      {#if evictionCauseSlices}
-        <div class="cause-pie">
-          <DonutChart
-            slices={evictionCauseSlices.slices}
-            size={180}
-            thickness={32}
-            centerValue="{Math.round(evictionCauseSlices.topPct * (scrollStep >= 5 ? Math.max(stepProgresses[5], scrollStep > 5 ? 1 : 0) : 0))}%"
-            centerLabel="non-payment"
-            progress={scrollStep >= 5 ? Math.max(stepProgresses[5], scrollStep > 5 ? 1 : 0) : 0}
-          />
+  <div class="story-scroll-step tall" data-step="5">
+    <div class="sticky-wrap">
+      <div class="story-section eviction-section" class:active={scrollStep === 5}>
+        <div class="story-text">
+          <h1>When Rent Outruns Income</h1>
+          <p>
+            Out of over 6,000 eviction filings filed in Boston between 2020 and 2024, the most common reason is simple: tenants <em>missed rent</em>.
+          </p>
+          <p class="detail">
+            As corporate landlords consolidate and rents climb, more tenants fall short on the first of the month.
+          </p>
+          <p><br>Who files these evictions?</p>
+          <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
         </div>
-      {/if}
+        {#if evictionCauseSlices}
+          <div class="cause-pie">
+            <DonutChart
+              slices={evictionCauseSlices.slices}
+              size={180}
+              thickness={32}
+              centerValue="{Math.round(evictionCauseSlices.topPct * (scrollStep >= 5 ? Math.max(stepProgresses[5], scrollStep > 5 ? 1 : 0) : 0))}%"
+              centerLabel="missed rent"
+              progress={scrollStep >= 5 ? Math.max(stepProgresses[5], scrollStep > 5 ? 1 : 0) : 0}
+            />
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 
   <!-- Step 5: Who's Really Filing — normalized corp vs individual -->
-  <div class="story-scroll-step" data-step="6">
-    <div class="story-section ovf-section" class:active={scrollStep === 6}>
-      <div class="story-text">
-        <h1>Who's Filing Evictions?</h1>
-        <p>
-          Although corporate entities make up roughly 1/5 of Boston's ownership, they file an overwhelming majority of tenant evictions. By normalizing filings
-          by ownership share, it is apparent that <strong style="color:#e67e22;">corporate landlords file evictions at several times their share of the market</strong>.
-        </p>
-        <p class="detail">
-          Each horizontal bar shows the distribution of ownership and eviction filings for corporate and individual landlords, over each year of available data. The rightmost column displays the filing-to-ownership ratio (FTOR) for corporate landlords.
-        </p>
+  <div class="story-scroll-step tall" data-step="6">
+    <div class="sticky-wrap">
+      <div class="story-section ovf-section" class:active={scrollStep === 6}>
+        <div class="story-text">
+          <h1>Who's Filing Evictions?</h1>
+          <p>
+            Although corporate entities make up roughly 1/5 of Boston's ownership, they file an overwhelming majority of tenant evictions. By normalizing filings
+            by ownership share, it is apparent that <strong style="color:#e67e22;">corporate landlords file evictions at several times their share of the market</strong>.
+          </p>
+          <div class="ftor-eqn" aria-label="Filings to Ownership Ratio formula">
+            <span class="ftor-name">Filings&#8209;to&#8209;Ownership Ratio (FTOR)</span>
+            <span class="ftor-eq">=</span>
+            <span class="ftor-frac">
+              <span class="ftor-num">Eviction Filings</span>
+              <span class="ftor-bar"></span>
+              <span class="ftor-den">Ownership Share</span>
+            </span>
+          </div>
+          <p class="detail">
+            Notice the FTOR <strong>shrinks year over year</strong>, even though corporate landlords still file roughly <strong>seven in ten evictions</strong>. The numerator (filings share) stays nearly constant, while the denominator (ownership share) keeps climbing — so the same outsized filing rate gets divided across a bigger ownership base, and the ratio falls.
+          </p>
+        </div>
+        <OwnershipVsFilings
+          evictionDots={evictionDots}
+          corpOwnership={storyData?.citywide?.corp_ownership ?? []}
+          progress={scrollStep >= 6 ? Math.max(stepProgresses[6], scrollStep > 6 ? 1 : 0) : 0}
+        />
       </div>
-      <OwnershipVsFilings
-        evictionDots={evictionDots}
-        corpOwnership={storyData?.citywide?.corp_ownership ?? []}
-        progress={scrollStep >= 6 ? Math.max(stepProgresses[6], scrollStep > 6 ? 1 : 0) : 0}
-      />
     </div>
   </div>
 
@@ -580,6 +668,14 @@
   <div class="story-scroll-step" data-step="7">
     <div class="story-section cta-section" class:active={scrollStep === 7}>
       <h1>Let's Look Closer.</h1>
+      <p class="cta-recap">
+        So far we've watched <strong style="color:#e67e22;">corporate ownership</strong>
+        climb fivefold, sales flow steadily from individuals into corporate hands,
+        rents outrun the incomes of the renters living in them, and eviction filings
+        pile up — overwhelmingly from <strong style="color:#e67e22;">corporate landlords</strong>
+        filing far above their share of the market. Citywide numbers tell the
+        shape of the problem, but they flatten the human story behind each filing.
+      </p>
       <p>We'll take you through <strong>6 neighborhoods</strong>, each with a different story. We will use eviction data to show the effect of investor activity on the people who live there.</p>
       <p>On the maps in the next section, <span class="dot-inline blue"></span> <strong class="blue-strong">dots</strong> represent eviction filings.</p>
       <button class="cta-btn" on:click={() => dispatch('enterDeepDive')}>
@@ -624,6 +720,14 @@
     opacity: 1;
     transform: translateY(0);
   }
+
+  .cta-recap {
+    margin-bottom: 8px;
+    font-size: 1rem !important;
+    line-height: 1.7 !important;
+    color: #444 !important;
+  }
+  .cta-recap :global(strong) { font-weight: 700; }
 
   .story-section.cta-section {
     flex-direction: column;
@@ -679,6 +783,93 @@
     align-items: stretch;
   }
   .ovf-section .story-text { min-width: 0; }
+
+  .ftor-eqn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 18px auto;
+    padding: 14px 22px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-left: 4px solid #e67e22;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+    color: #1a1a1a;
+    font-variant-numeric: tabular-nums;
+    flex-wrap: wrap;
+    text-align: center;
+  }
+  .ftor-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .ftor-eq {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #888;
+  }
+  .ftor-frac {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+  .ftor-num,
+  .ftor-den {
+    padding: 2px 8px;
+    white-space: nowrap;
+    color: #1a1a1a;
+  }
+  .ftor-bar {
+    height: 2px;
+    background: #1a1a1a;
+    width: 100%;
+    min-width: 140px;
+    border-radius: 1px;
+    margin: 2px 0;
+  }
+
+  .corp-section {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+    max-width: 1020px;
+    gap: 24px;
+    /* Anchor near the top of the sticky viewport so the heading sits
+       higher on the screen. */
+    align-self: flex-start;
+    margin-top: 24px;
+  }
+  .corp-intro {
+    max-width: 900px;
+    min-width: 0;
+  }
+  .corp-intro p :global(strong) { color: inherit; }
+  .corp-vis-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
+  .corp-prompt {
+    margin: 0;
+    font-size: 1.05rem;
+    color: #444;
+    text-align: left;
+  }
+  .corp-arrow {
+    margin-top: 4px;
+    text-align: left;
+  }
+  @media (max-width: 900px) {
+    .corp-vis-row { gap: 20px; }
+  }
 
   .trust-section {
     flex-direction: column;
@@ -766,12 +957,83 @@
     max-width: 780px;
     gap: 0;
     padding: 20px 24px;
+    position: relative;
+    isolation: isolate;
+  }
+  .project-credit {
+    position: absolute;
+    top: 18px;
+    right: 22px;
+    text-align: right;
+    z-index: 2;
+    line-height: 1.25;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #444;
+    pointer-events: none;
+  }
+  .pc-course {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #888;
+  }
+  .pc-team {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-top: 1px;
+  }
+  .pc-members {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 2px;
+  }
+  @media (max-width: 700px) {
+    .project-credit { top: 12px; right: 14px; }
+    .pc-course { font-size: 0.62rem; }
+    .pc-team { font-size: 0.76rem; }
+    .pc-members { font-size: 0.62rem; }
+  }
+  .hero-skyline {
+    position: absolute;
+    left: 50%;
+    bottom: 44px; /* sits between the lede and the "Scroll to begin" arrow */
+    width: min(1600px, 140vw);
+    height: auto;
+    transform: translateX(-50%);
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.85;
+  }
+  .skyline-shapes rect,
+  .skyline-shapes polygon,
+  .skyline-shapes circle,
+  .skyline-shapes line {
+    fill: none;
+    stroke: #b5b5b5;
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    animation: skylinePulseStroke 4s ease-in-out infinite alternate;
+  }
+  @keyframes skylinePulseStroke {
+    0%   { stroke: #b5b5b5; }
+    100% { stroke: #e67e22; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skyline-shapes rect,
+    .skyline-shapes polygon,
+    .skyline-shapes circle,
+    .skyline-shapes line { animation: none; }
   }
   .hero-inner {
     display: flex;
     flex-direction: column;
     gap: 18px;
     text-align: center;
+    position: relative;
+    z-index: 1;
   }
   .hero-eyebrow {
     display: inline-block;
@@ -789,6 +1051,9 @@
     letter-spacing: -0.02em;
     color: #1a1a1a;
     margin: 0;
+    text-shadow:
+      0 2px 6px rgba(255, 255, 255, 0.85),
+      0 4px 14px rgba(0, 0, 0, 0.18);
   }
   .hero-lede {
     font-size: 1.2rem !important;
@@ -796,6 +1061,9 @@
     color: #333 !important;
     max-width: 640px;
     margin: 0 auto !important;
+    text-shadow:
+      0 1px 4px rgba(255, 255, 255, 0.9),
+      0 2px 8px rgba(0, 0, 0, 0.12);
   }
   .hero-accent {
     color: #c0392b !important;
@@ -816,7 +1084,7 @@
     padding: 0;
     align-items: flex-start;
   }
-  .price-sticky {
+  .sticky-wrap {
     position: sticky;
     top: 0;
     height: 100vh;
@@ -825,6 +1093,9 @@
     justify-content: center;
     width: 100%;
     padding: 40px 60px;
+  }
+  @media (max-width: 900px) {
+    .sticky-wrap { padding: 40px 24px; }
   }
 
   .income-compare {
@@ -1034,45 +1305,88 @@
   .boston-renter { background: #2d3748; }
   .boston-owner {}
 
-  .flow-section .story-text,
-  .flow-section .story-chart {
-    flex: 1 1 0;
-    min-width: 280px;
+  .flow-section {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+    max-width: 1020px;
+    gap: 18px;
+    /* Anchor near the top of the sticky viewport so the heading has buffer
+       above it and the scroll arrow appears higher on the screen instead
+       of being centered. */
+    align-self: flex-start;
+    margin-top: 24px;
   }
-  .flow-section .story-chart { max-width: 640px; }
+  .flow-arrow {
+    /* Pull the arrow up so it sits right below the visualization, instead
+       of trailing the bottom padding of the stats column. */
+    margin-top: -60px;
+  }
+  .flow-intro { max-width: none; width: 100%; }
 
-  .flow-list {
+  .flow-with-stats {
+    display: flex;
+    align-items: stretch;
+    gap: 28px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .flow-chart-wrap {
+    flex: 1 1 540px;
+    min-width: 0;
+    max-width: 600px;
+  }
+  .flow-stats {
+    flex: 0 0 360px;
+    display: flex;
+    flex-direction: column;
+    /* Top group sits near the Corporate box (top), bottom group near the
+       Individual box (bottom). FlowDiagram's corp row ~22% from top,
+       ind row ~78% from top. */
+    justify-content: space-between;
+    gap: 48px;
+    padding: 1% 0 12%;
+  }
+  .flow-stat-group {
     list-style: none;
     padding: 0;
-    margin: 14px 0 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .flow-stat {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-width: 380px;
+    padding: 8px 0;
   }
-  .flow-list li {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 0;
-    border-bottom: 1px solid #eee;
+  .flow-stat + .flow-stat {
+    border-top: 1px solid #eee;
   }
-  .flow-list li:last-child { border-bottom: none; }
   .fl-head {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     gap: 14px;
     font-size: 0.92rem;
+    flex-wrap: nowrap;
+    white-space: nowrap;
   }
   .fl-name {
     font-weight: 700;
     white-space: nowrap;
+    flex: 0 0 auto;
   }
+  .fl-name .gray { color: #888; }
+  .fl-name .corp { color: #e67e22; }
+  .fl-name .ind  { color: #2563eb; }
   .fl-val {
     color: #666;
     font-variant-numeric: tabular-nums;
     font-size: 0.86rem;
+    white-space: nowrap;
+    flex: 0 0 auto;
   }
   .fl-val strong { color: #1a1a1a; font-weight: 800; }
   .fl-implication {
@@ -1083,6 +1397,10 @@
   .fl-implication strong {
     color: #1a1a1a;
     font-weight: 700;
+  }
+  @media (max-width: 900px) {
+    .flow-with-stats { flex-direction: column; }
+    .flow-stats { flex: 1 1 auto; padding: 0; }
   }
 
   .eviction-section {

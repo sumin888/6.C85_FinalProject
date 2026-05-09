@@ -128,6 +128,7 @@
         {zoriData}
         {evictionDots}
         {geoData}
+        {properties}
         {openReferences}
         on:enterDeepDive={enterDeepDive}
       />
@@ -188,6 +189,7 @@
           dimOtherNeighborhoods={mapDimOthers}
           zoomFeature={mapZoomFeature}
           zoomProgress={mapZoomProgress}
+          autoZoomOnFocus={phase !== 'deepdive'}
           rightReservedPx={mapRightReservedPx}
           darkColorMode={phase === 'explore' || phase === 'deepdive'}
           externalPopup={phase === 'explore'}
@@ -212,6 +214,7 @@
           bind:mapHighlightEvictions
           bind:mapFocusNeighborhood
           bind:mapDimOthers
+          bind:mapZoomProgress
           on:back={backToStory}
           on:explore={enterExplore}
           {openReferences}

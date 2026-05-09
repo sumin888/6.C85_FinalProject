@@ -24,10 +24,15 @@
   export let mapHighlightEvictions = false;
   export let mapFocusNeighborhood = null;
   export let mapDimOthers = true;
+  // Bound out: scroll-driven zoom progress (0 = wide Boston view with
+  // neighborhood outlined, 1 = zoomed-in on neighborhood).
+  export let mapZoomProgress = 0;
 
-  // Scroll step inside NeighborhoodStory, drives the legend overlay
+  // Scroll step inside NeighborhoodStory, drives the legend overlay.
+  // Steps: 0 history, 1 today's numbers, 2 eviction overview,
+  // 3 who's filing, 4 rent rising, 5 what's left.
   let storyScrollStep = 0;
-  $: legendSplit = storyScrollStep >= 2;
+  $: legendSplit = storyScrollStep >= 3;
 
   // Opens the global References modal
   export let openReferences = () => {};
@@ -134,6 +139,7 @@
       bind:mapHighlightInvestors
       bind:mapHighlightEvictions
       bind:scrollStep={storyScrollStep}
+      bind:mapZoomProgress
       {openReferences}
     />
 

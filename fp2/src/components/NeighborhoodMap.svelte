@@ -15,6 +15,9 @@
   export let focusNeighborhood = null;
   export let zoomFeature = null;
   export let zoomProgress = 0;
+  // When true (the default), setting focusNeighborhood snaps zoomProgress to 1.
+  // The deep-dive view passes false so it can drive zoomProgress from scroll.
+  export let autoZoomOnFocus = true;
   export let rightReservedPx = 0;  // width of any overlay panel on the right (e.g. deep-dive sidebar)
   export let darkColorMode = false;  // when true: solid dark green (individual) / dark red (corporate), no rent gradient
   export let externalPopup = false;  // when true: suppress internal popup and expose clicked dots via selectedDots binding
@@ -171,12 +174,19 @@
   })();
 
   // ── Build base projection when dimensions or data change ──────────────────
+  // Fit the map into the visible area, excluding any reserved panel space on
+  // the right (e.g. the 420px deep-dive sidebar). Without this the map would
+  // visually drift behind the panel; with it, Boston sits centered in the
+  // viewport area the user can actually see.
   $: if (geoData && width > 0 && height > 0) {
     const padding = 20;
+    // Reserve only ~60% of the panel width on the right, so the map shifts
+    // back slightly toward the panel rather than hugging the far left.
+    const rightPad = padding + Math.max(0, rightReservedPx) * 0.6;
     projection = d3
       .geoMercator()
       .fitExtent(
-        [[padding, padding], [width - padding, height - padding]],
+        [[padding, padding], [width - rightPad, height - padding]],
         geoData
       );
     pathGen = d3.geoPath().projection(projection);
@@ -199,8 +209,10 @@
     zoomedTranslate = tempProj.translate().slice();
   }
 
-  // When focusNeighborhood is set, force full zoom
-  $: if (focusNeighborhood && effectiveZoomFeature) {
+  // When focusNeighborhood is set, force full zoom — unless autoZoomOnFocus
+  // is disabled (e.g. by the deep-dive view, which drives zoomProgress from
+  // scroll position).
+  $: if (autoZoomOnFocus && focusNeighborhood && effectiveZoomFeature) {
     zoomProgress = 1;
   }
 
@@ -573,12 +585,13 @@
           {@const isZoomTarget = effectiveZoomFeature?.properties.name === feature.properties.name}
           {@const zoomStroke = isZoomTarget && zoomProgress > 0}
           {@const isDimmed = dimOtherNeighborhoods && focusNeighborhood && feature.properties.name !== focusNeighborhood}
+          {@const isFocusOutline = isZoomTarget && !!focusNeighborhood}
           <path
             d={pathGen(feature)}
             fill={isDimmed ? '#d8d8d8' : '#e8e8e8'}
             opacity={isDimmed ? 0.3 : (effectiveZoomFeature && zoomProgress > 0 && !isZoomTarget ? 1 - zoomProgress * 0.7 : 1)}
-            stroke={zoomStroke ? '#111' : isSelected ? '#111' : isHovered ? '#666' : '#bbb'}
-            stroke-width={zoomStroke ? 1.5 + zoomProgress * 1.5 : isSelected ? 2 : isHovered ? 1.5 : 0.8}
+            stroke={isFocusOutline ? '#111' : zoomStroke ? '#111' : isSelected ? '#111' : isHovered ? '#666' : '#bbb'}
+            stroke-width={isFocusOutline ? 1.6 + zoomProgress * 1.4 : zoomStroke ? 1.5 + zoomProgress * 1.5 : isSelected ? 2 : isHovered ? 1.5 : 0.8}
             class="neighborhood-path"
             class:hovered={isHovered}
             class:selected={isSelected}
