@@ -1,3 +1,10 @@
+<script context="module">
+  // Module-scoped flag: persists for the page lifetime but resets on full
+  // refresh. Used to honor the "don't show again" checkbox on the intro
+  // popup without surviving a reload.
+  let suppressIntroForSession = false;
+</script>
+
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { createEventDispatcher } from 'svelte';
@@ -47,9 +54,12 @@
 
   // Intro popup: dim the map and point readers to the neighborhood
   // selector + rent slider. Re-shows every time the user enters the
-  // deep-dive view (from the overview or from explore-on-your-own).
+  // deep-dive view (from the overview or from explore-on-your-own),
+  // unless the user ticked "Don't show this again" earlier in the session.
   let showIntroPopup = true;
+  let dontShowAgain = false;
   function closeIntro() {
+    if (dontShowAgain) suppressIntroForSession = true;
     showIntroPopup = false;
   }
   function onIntroKey(e) {
@@ -63,7 +73,8 @@
   }
 
   onMount(() => {
-    showIntroPopup = true;
+    showIntroPopup = !suppressIntroForSession;
+    dontShowAgain = false;
     window.addEventListener('keydown', handleKeydown);
     window.addEventListener('keydown', onIntroKey);
     return () => {
@@ -99,7 +110,13 @@
         interpolated using <strong>ZORI</strong>, Zillow's Observed Rent
         Index, which tracks market rent over time.
       </p>
-      <button class="intro-cta" on:click={closeIntro}>Got it</button>
+      <div class="intro-footer">
+        <label class="intro-checkbox">
+          <input type="checkbox" bind:checked={dontShowAgain} />
+          <span>Don't show this again</span>
+        </label>
+        <button class="intro-cta" on:click={closeIntro}>Got it</button>
+      </div>
     </div>
   {/if}
 
@@ -430,6 +447,30 @@
     transition: background 0.15s;
   }
   .intro-cta:hover { background: #236b23; }
+
+  .intro-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .intro-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #555;
+    cursor: pointer;
+    user-select: none;
+  }
+  .intro-checkbox input {
+    width: 14px;
+    height: 14px;
+    accent-color: #2d8c2d;
+    cursor: pointer;
+  }
+  .intro-checkbox:hover { color: #1a1a1a; }
 
   /* Highlight the < / > arrows in the nav and the budget slider while the
      intro popup is open. Both sit in the sidebar (already undimmed) and
