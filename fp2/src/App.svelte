@@ -1,14 +1,12 @@
 <script>
   import { onMount } from 'svelte';
-  import { loadNeighborhoodGeo, loadProperties, loadZoriByNeighborhood, loadEvictionsByNeighborhood, loadStoryData, loadEvictionDots, filterEvictionDots } from './lib/data.js';
+  import { loadNeighborhoodGeo, loadProperties, loadZoriByNeighborhood, loadEvictionsByNeighborhood, loadStoryData, loadEvictionDots, filterProperties, filterEvictionDots } from './lib/data.js';
   import NeighborhoodMap from './components/NeighborhoodMap.svelte';
-  import NeighborhoodScene3D from './components/NeighborhoodScene3D.svelte';
   import ControlsOverlay from './components/ControlsOverlay.svelte';
   import StoryIntro from './components/StoryIntro.svelte';
   import NeighborhoodDeepDive from './components/NeighborhoodDeepDive.svelte';
   import IntroScroller from './components/IntroScroller.svelte';
   import ReferencesModal from './components/ReferencesModal.svelte';
-  import { currentNeighborhood } from './stores/navigation.js';
 
   let referencesOpen = false;
   function openReferences() { referencesOpen = true; }
@@ -37,14 +35,14 @@
   let mapFocusNeighborhood = null;
   let mapDimOthers = false;
 
-  // ── Deepdive scroll step — drives the 3D scene ─────────────────────────
-  let deepDiveScrollStep = 0;
-
   let clickedNeighborhood = null;
   let neighborhoodCounts = {};
   let mapSelectedDots = [];
   let mapResetViewSignal = 0;
+  let mapUserDotScale = 1;
 
+  // ── Show map only in deepdive and explore phases ───────────────────────
+  $: showMap = phase !== 'story';
 
   // ── Reserve map space for right-hand panels (deep-dive sidebar is 420px) ─
   $: mapRightReservedPx = phase === 'deepdive' ? 420 : 0;
@@ -131,6 +129,7 @@
         {zoriData}
         {evictionDots}
         {geoData}
+        {properties}
         {openReferences}
         on:enterDeepDive={enterDeepDive}
       />
@@ -179,38 +178,29 @@
           </ControlsOverlay>
         {/if}
 
-        {#if phase === 'deepdive'}
-          <NeighborhoodScene3D
-            neighborhood={$currentNeighborhood}
-            {geoData}
-            {evictionDots}
-            {properties}
-            {maxRent}
-            scrollStep={deepDiveScrollStep}
-          />
-        {:else}
-          <NeighborhoodMap
-            {geoData}
-            dots={evictionDots}
-            {maxRent}
-            maxYear={mapMaxYear}
-            useCurrentRent={mapUseCurrentRent}
-            highlightInvestors={mapHighlightInvestors}
-            highlightEvictions={mapHighlightEvictions}
-            focusNeighborhood={mapFocusNeighborhood}
-            dimOtherNeighborhoods={mapDimOthers}
-            zoomFeature={mapZoomFeature}
-            zoomProgress={mapZoomProgress}
-            rightReservedPx={mapRightReservedPx}
-            darkColorMode={true}
-            externalPopup={true}
-            userPanZoom={true}
-            resetViewSignal={mapResetViewSignal}
-            bind:selectedDots={mapSelectedDots}
-            bind:selectedNeighborhood={clickedNeighborhood}
-            bind:affordableByNeighborhood={neighborhoodCounts}
-          />
-        {/if}
+        <NeighborhoodMap
+          {geoData}
+          dots={evictionDots}
+          {maxRent}
+          maxYear={mapMaxYear}
+          useCurrentRent={mapUseCurrentRent}
+          highlightInvestors={mapHighlightInvestors}
+          highlightEvictions={mapHighlightEvictions}
+          focusNeighborhood={mapFocusNeighborhood}
+          dimOtherNeighborhoods={mapDimOthers}
+          zoomFeature={mapZoomFeature}
+          zoomProgress={mapZoomProgress}
+          autoZoomOnFocus={phase !== 'deepdive'}
+          rightReservedPx={mapRightReservedPx}
+          darkColorMode={phase === 'explore' || phase === 'deepdive'}
+          externalPopup={phase === 'explore'}
+          userPanZoom={phase === 'explore'}
+          resetViewSignal={mapResetViewSignal}
+          bind:selectedDots={mapSelectedDots}
+          bind:selectedNeighborhood={clickedNeighborhood}
+          bind:affordableByNeighborhood={neighborhoodCounts}
+          bind:userDotScale={mapUserDotScale}
+        />
       </div>
 
       {#if phase === 'deepdive'}
@@ -226,7 +216,7 @@
           bind:mapHighlightEvictions
           bind:mapFocusNeighborhood
           bind:mapDimOthers
-          bind:storyScrollStep={deepDiveScrollStep}
+          bind:mapZoomProgress
           on:back={backToStory}
           on:explore={enterExplore}
           {openReferences}
@@ -244,6 +234,7 @@
           bind:mapZoomProgress
           selectedDots={mapSelectedDots}
           bind:resetViewSignal={mapResetViewSignal}
+          userDotScale={mapUserDotScale}
           on:back={backToStory}
           on:backToDeepDive={enterDeepDive}
           {openReferences}
@@ -269,7 +260,7 @@
 
   .map-sticky {
     position: sticky; top: 0; height: 100vh; width: 100%;
-    background: #F5FDFF; z-index: 1;
+    background: #f0f0f0; z-index: 1;
   }
 
   .detail-panel {

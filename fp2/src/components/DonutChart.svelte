@@ -112,7 +112,7 @@
   }
   .donut-legend {
     list-style: none;
-    padding: 0;
+    padding: 0 14px 0 0;
     margin: 0;
     display: flex;
     flex-direction: column;

@@ -1,3 +1,10 @@
+<script context="module">
+  // Module-scoped flag: persists for the page lifetime but resets on full
+  // refresh. Used to honor the "don't show again" checkbox on the intro
+  // popup without surviving a reload.
+  let suppressIntroForSession = false;
+</script>
+
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { createEventDispatcher } from 'svelte';
@@ -24,9 +31,14 @@
   export let mapHighlightEvictions = false;
   export let mapFocusNeighborhood = null;
   export let mapDimOthers = true;
+  // Bound out: scroll-driven zoom progress (0 = wide Boston view with
+  // neighborhood outlined, 1 = zoomed-in on neighborhood).
+  export let mapZoomProgress = 0;
 
-  // Scroll step inside NeighborhoodStory, drives the legend overlay
-  export let storyScrollStep = 0;
+  // Scroll step inside NeighborhoodStory, drives the legend overlay.
+  // Steps: 0 overview, 1 eviction overview, 2 who's filing,
+  // 3 rent rising, 4 what's left.
+  let storyScrollStep = 0;
   $: legendSplit = storyScrollStep >= 2;
 
   // Opens the global References modal
@@ -40,6 +52,20 @@
   // Drive map focus from current neighborhood
   $: mapFocusNeighborhood = $currentNeighborhood;
 
+  // Intro popup: dim the map and point readers to the neighborhood
+  // selector + rent slider. Re-shows every time the user enters the
+  // deep-dive view (from the overview or from explore-on-your-own),
+  // unless the user ticked "Don't show this again" earlier in the session.
+  let showIntroPopup = true;
+  let dontShowAgain = false;
+  function closeIntro() {
+    if (dontShowAgain) suppressIntroForSession = true;
+    showIntroPopup = false;
+  }
+  function onIntroKey(e) {
+    if (showIntroPopup && e.key === 'Escape') { e.preventDefault(); closeIntro(); }
+  }
+
   // Keyboard navigation
   function handleKeydown(e) {
     if (e.key === 'ArrowRight') { e.preventDefault(); nextNeighborhood(); }
@@ -47,13 +73,56 @@
   }
 
   onMount(() => {
+    showIntroPopup = !suppressIntroForSession;
+    dontShowAgain = false;
     window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
+    window.addEventListener('keydown', onIntroKey);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('keydown', onIntroKey);
+    };
   });
 </script>
 
 <div class="deep-dive">
   <button class="deep-dive-back" on:click={() => dispatch('back')}>&larr; Back to overview</button>
+
+  {#if showIntroPopup}
+    <div class="intro-backdrop" on:click={closeIntro} aria-hidden="true"></div>
+    <div
+      class="intro-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Welcome to the neighborhoods"
+      on:click|stopPropagation
+    >
+      <button class="intro-close" on:click={closeIntro} aria-label="Close">×</button>
+      <div class="intro-eyebrow">Explore Neighborhoods</div>
+      <p class="intro-body">
+        Here are six neighborhoods that exemplify the effect of corporate
+        ownership on rental prices. Feel free to move between the
+        neighborhoods on the upper right, and use the <strong>My Budget</strong>
+        slider to put in your desired rental budget.
+      </p>
+      <p class="intro-body intro-dot-hint">
+        On the maps that follow, <span class="intro-dot blue"></span>
+        <strong>dots</strong> represent eviction filings.
+      </p>
+      <p class="intro-caveat">
+        <strong>Note:</strong> Per-unit rents we'll show later are
+        <em>estimates</em>, not pulled from actual leases — they're
+        interpolated using <strong>ZORI</strong>, Zillow's Observed Rent
+        Index, which tracks market rent over time.
+      </p>
+      <div class="intro-footer">
+        <label class="intro-checkbox">
+          <input type="checkbox" bind:checked={dontShowAgain} />
+          <span>Don't show this again</span>
+        </label>
+        <button class="intro-cta" on:click={closeIntro}>Got it</button>
+      </div>
+    </div>
+  {/if}
 
   <!-- Eviction-case legend, pinned bottom-left. Starts as a single
        "eviction count" row; when the user scrolls to "Who's Filing These?"
@@ -74,21 +143,21 @@
         <span class="legend-swatch corporate"></span>
         <span class="legend-label">Corporate landlord</span>
       </div>
+    </div>
 
-      <div class="legend-subtitle">Dot size = cases at location</div>
-      <div class="size-row">
-        <div class="size-cell">
-          <span class="size-swatch" style="width:6px;height:6px;"></span>
-          <span class="size-lbl">1</span>
-        </div>
-        <div class="size-cell">
-          <span class="size-swatch" style="width:10px;height:10px;"></span>
-          <span class="size-lbl">few</span>
-        </div>
-        <div class="size-cell">
-          <span class="size-swatch" style="width:16px;height:16px;"></span>
-          <span class="size-lbl">many</span>
-        </div>
+    <div class="legend-subtitle">Dot size = cases at location</div>
+    <div class="size-row">
+      <div class="size-cell">
+        <span class="size-swatch" style="width:6px;height:6px;"></span>
+        <span class="size-lbl">1</span>
+      </div>
+      <div class="size-cell">
+        <span class="size-swatch" style="width:10px;height:10px;"></span>
+        <span class="size-lbl">few</span>
+      </div>
+      <div class="size-cell">
+        <span class="size-swatch" style="width:16px;height:16px;"></span>
+        <span class="size-lbl">many</span>
       </div>
     </div>
 
@@ -101,9 +170,11 @@
   </aside>
 
   <div class="deep-dive-panel">
-    <NeighborhoodNav />
+    <div class="nav-wrap" class:spotlight={showIntroPopup}>
+      <NeighborhoodNav />
+    </div>
 
-    <div class="rent-slider">
+    <div class="rent-slider" class:spotlight={showIntroPopup}>
       <div class="rent-slider-header">
         <span class="rent-slider-label">My budget</span>
         <span class="rent-slider-value">${maxRent.toLocaleString()}/mo</span>
@@ -134,6 +205,7 @@
       bind:mapHighlightInvestors
       bind:mapHighlightEvictions
       bind:scrollStep={storyScrollStep}
+      bind:mapZoomProgress
       {openReferences}
     />
 
@@ -181,7 +253,7 @@
       transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
   }
   .dot-legend-overlay.expanded .extra {
-    max-height: 160px;
+    max-height: 40px;
     opacity: 1;
     transform: translateY(0);
   }
@@ -293,6 +365,163 @@
     text-decoration: underline;
   }
   .dot-legend-overlay .legend-refs-link:hover { color: #1d4dbf; }
+
+  .intro-backdrop {
+    pointer-events: auto;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 420px; /* leave the sidebar visible/undimmed */
+    background: rgba(15, 15, 15, 0.55);
+    backdrop-filter: blur(1px);
+    z-index: 40;
+    animation: introFade 220ms ease both;
+  }
+  .intro-popup {
+    pointer-events: auto;
+    position: absolute;
+    top: 50%;
+    left: calc((100% - 420px) / 2);
+    transform: translate(-50%, -50%);
+    z-index: 50;
+    width: min(460px, calc(100% - 460px));
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.30);
+    padding: 24px 28px 22px;
+    font-family: 'Inter', system-ui, sans-serif;
+    animation: introScale 220ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+  .intro-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: #f0f0f0;
+    color: #555;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .intro-close:hover { background: #e0e0e0; color: #111; }
+  .intro-eyebrow {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #2d8c2d;
+    margin-bottom: 6px;
+  }
+  .intro-body {
+    font-size: 0.92rem;
+    color: #333;
+    line-height: 1.6;
+    margin: 0 0 16px;
+  }
+  .intro-body strong { color: #1a1a1a; font-weight: 700; }
+  .intro-dot-hint { margin-top: -6px; }
+  .intro-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin: 0 2px 1px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+  }
+  .intro-dot.blue { background: #2563eb; }
+  .intro-caveat {
+    margin: 0 0 16px;
+    padding: 9px 12px;
+    background: #fafafa;
+    border-left: 3px solid #bbb;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    color: #555;
+    line-height: 1.55;
+  }
+  .intro-caveat strong { color: #1a1a1a; font-weight: 700; }
+  .intro-caveat em { color: #444; font-style: italic; font-weight: 600; }
+  .intro-cta {
+    background: #2d8c2d;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .intro-cta:hover { background: #236b23; }
+
+  .intro-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .intro-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #555;
+    cursor: pointer;
+    user-select: none;
+  }
+  .intro-checkbox input {
+    width: 14px;
+    height: 14px;
+    accent-color: #2d8c2d;
+    cursor: pointer;
+  }
+  .intro-checkbox:hover { color: #1a1a1a; }
+
+  /* Highlight the < / > arrows in the nav and the budget slider while the
+     intro popup is open. Both sit in the sidebar (already undimmed) and
+     gain a pulsing green glow. */
+  .nav-wrap { position: relative; }
+  .nav-wrap.spotlight :global(.nav-arrow) {
+    position: relative;
+    z-index: 45;
+    border-color: #2d8c2d !important;
+    color: #2d8c2d !important;
+    box-shadow:
+      0 0 0 3px rgba(45, 140, 45, 0.55),
+      0 0 22px rgba(45, 140, 45, 0.35);
+    animation: spotlightPulse 1.8s ease-in-out infinite alternate;
+  }
+  .rent-slider.spotlight {
+    position: relative;
+    z-index: 45;
+    box-shadow:
+      0 0 0 3px rgba(45, 140, 45, 0.55),
+      0 0 22px rgba(45, 140, 45, 0.35);
+    border-radius: 8px;
+    animation: spotlightPulse 1.8s ease-in-out infinite alternate;
+  }
+  @keyframes spotlightPulse {
+    from { box-shadow: 0 0 0 3px rgba(45, 140, 45, 0.45), 0 0 14px rgba(45, 140, 45, 0.25); }
+    to   { box-shadow: 0 0 0 3px rgba(45, 140, 45, 0.70), 0 0 30px rgba(45, 140, 45, 0.50); }
+  }
+  @keyframes introFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes introScale {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
 
   .deep-dive-back {
     pointer-events: auto;
