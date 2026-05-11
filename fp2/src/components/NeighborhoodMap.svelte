@@ -45,6 +45,12 @@
 
   // ── User pan/zoom transform (applied on top of the auto projection) ─────
   let userK = 1, userTx = 0, userTy = 0;
+  // Grow dots as the user zooms in so they stay clickable at high zoom.
+  // sqrt(userK) gives diminishing returns; clamped so dots never get tiny
+  // when zoomed out or absurdly large at max zoom. Bound out so legends
+  // and other overlays can stay in sync with the on-screen dot size.
+  export let userDotScale = 1;
+  $: userDotScale = Math.min(3.2, Math.max(0.85, Math.sqrt(userK)));
   let zoomBehavior = null;
   let zoomAttached = false;
 
@@ -120,7 +126,7 @@
     const currentIds = new Set();
     for (const d of curr) currentIds.add(dotIdentity(d));
     const now = performance.now();
-    const r = 1.8 + zoomProgress * 1.1;
+    const r = (1.8 + zoomProgress * 1.1) * userDotScale;
     // Same focus geometry as drawDots uses for its inside/outside coloring.
     const focusFeature = (dimOtherNeighborhoods && focusNeighborhood && geoData)
       ? geoData.features.find(f => f.properties.name === focusNeighborhood)
@@ -306,7 +312,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, logicalW, logicalH);
 
-    const baseRadius = 1.8 + zoomProgress * 1.1;
+    const baseRadius = (1.8 + zoomProgress * 1.1) * userDotScale;
     const rentKey = useCurrentRent ? 'rent_now' : 'rent_at_filing';
 
     // Geographic focus-containment: test each dot against the focused neighborhood's
@@ -463,19 +469,32 @@
     const rect = canvasEl.getBoundingClientRect();
     const cx = event.clientX - rect.left;
     const cy = event.clientY - rect.top;
-    const hitRadius = 12;
+    // Hit radius: a small forgiveness margin scaled with the rendered dot
+    // size. Kept tight so clicks select the dot directly under the cursor
+    // rather than any dot within a wide blob.
+    const hitRadius = 8 + 4 * userDotScale;
 
-    // Find eviction cases near click
+    // Find every dot within the hit radius, and track the closest so the
+    // selection actually corresponds to the dot you clicked on.
     const hits = [];
+    let bestD2 = Infinity;
+    let bestDot = null;
     for (const d of filteredDots) {
       const [px, py] = projection([d.lng, d.lat]);
       const dx = px - cx, dy = py - cy;
-      if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+      const d2 = dx * dx + dy * dy;
+      if (d2 <= hitRadius * hitRadius) {
         hits.push(d);
+        if (d2 < bestD2) { bestD2 = d2; bestDot = d; }
       }
     }
 
     if (hits.length > 0) {
+      // Put the closest dot first so the popup highlights it.
+      if (bestDot && hits[0] !== bestDot) {
+        const idx = hits.indexOf(bestDot);
+        if (idx > 0) { hits.splice(idx, 1); hits.unshift(bestDot); }
+      }
       selectedDotLoc = { lat: hits[0].lat, lng: hits[0].lng };
       if (externalPopup) {
         selectedDots = hits.slice(0, 5);

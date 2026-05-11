@@ -84,8 +84,9 @@
       {/each}
     </g>
   </svg>
-  <div class="map-label">
-    Corporate Ownership <span class="year">({displayYear})</span>
+  <div class="year-stack">
+    <div class="year-label">Corporate Ownership</div>
+    <div class="year-badge">{displayYear}</div>
   </div>
 </div>
 
@@ -115,21 +116,33 @@
     stroke-opacity: 0.45;
     stroke-width: 0.4;
   }
-  .map-label {
+  .year-stack {
     position: absolute;
     bottom: 0;
     right: 0;
-    padding: 2px 4px 0;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: #555;
-    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
     pointer-events: none;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.01em;
   }
-  .map-label .year {
-    color: #e67e22;
+  .year-label {
+    font-size: 0.62rem;
     font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #777;
+  }
+  .year-badge {
+    padding: 4px 10px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    font-size: 1rem;
+    font-weight: 800;
+    color: #e67e22;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
   }
 </style>

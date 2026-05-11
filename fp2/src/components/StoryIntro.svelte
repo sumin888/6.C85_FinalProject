@@ -1,6 +1,7 @@
 <script>
   import { onMount, tick, createEventDispatcher } from 'svelte';
   import { fade } from 'svelte/transition';
+  import * as d3 from 'd3';
 
   export let openReferences = () => {};
   import AnimatedLineChart from './AnimatedLineChart.svelte';
@@ -17,6 +18,19 @@
   export let evictionDots = [];  // eviction case dots, for per-year aggregation
   export let geoData;     // neighborhoods.geojson (for median income)
   export let properties = [];    // property sale records (for corporate-ownership map dots)
+
+  // Hero backdrop: Boston neighborhoods projected to a fixed viewBox,
+  // rendered behind the title and pulsed gray ↔ orange.
+  const HERO_W = 1400;
+  const HERO_H = 760;
+  $: heroPaths = (() => {
+    if (!geoData?.features?.length) return [];
+    const projection = d3.geoMercator().fitSize([HERO_W, HERO_H], geoData);
+    const pathGen = d3.geoPath().projection(projection);
+    return geoData.features
+      .map(f => pathGen(f))
+      .filter(Boolean);
+  })();
 
   let scrollStep = 0;
   let stepProgresses = [0, 0, 0, 0, 0, 0, 0, 0]; // per-step scroll progress 0–1
@@ -98,9 +112,17 @@
     const total = [...counts.values()].reduce((a, b) => a + b, 0);
     const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
     const palette = ['#c0392b', '#e67e22', '#f1c40f', '#2563eb', '#888888'];
+    // Per-label overrides — Foreclosure reads as brown rather than blue.
+    const labelColor = {
+      'Foreclosure': '#8d6e63',
+    };
     const top = sorted.slice(0, 4);
     const restSum = sorted.slice(4).reduce((s, [, v]) => s + v, 0);
-    const slices = top.map(([label, value], i) => ({ label, value, color: palette[i] }));
+    const slices = top.map(([label, value], i) => ({
+      label,
+      value,
+      color: labelColor[label] ?? palette[i],
+    }));
     if (restSum > 0) slices.push({ label: 'Other', value: restSum, color: palette[palette.length - 1] });
     const top1 = sorted[0];
     return {
@@ -307,69 +329,29 @@
       <div class="pc-members">Alex Tung · Nuri Hong · Sumin Byun</div>
     </div>
     <div class="story-section hero-section" class:active={scrollStep === 0}>
-      <svg
-        class="hero-skyline"
-        viewBox="0 0 1400 280"
-        preserveAspectRatio="xMidYEnd slice"
-        aria-hidden="true"
-      >
-        <g class="skyline-shapes">
-          <!-- Low warehouses on the left -->
-          <rect x="0" y="210" width="70" height="70" />
-          <rect x="70" y="190" width="60" height="90" />
-          <rect x="130" y="170" width="50" height="110" />
-
-          <!-- Mid-rise office cluster -->
-          <rect x="180" y="150" width="80" height="130" />
-          <rect x="260" y="135" width="60" height="145" />
-          <line x1="290" y1="135" x2="290" y2="105" stroke-width="2" />
-
-          <!-- Custom House Tower with pyramid spire and clock face -->
-          <rect x="345" y="95" width="46" height="185" />
-          <polygon points="335,95 368,55 401,95" />
-          <line x1="368" y1="55" x2="368" y2="35" stroke-width="2" />
-          <circle cx="368" cy="125" r="6" />
-
-          <!-- Step buildings -->
-          <rect x="410" y="160" width="70" height="120" />
-          <rect x="425" y="135" width="40" height="30" />
-          <rect x="490" y="175" width="60" height="105" />
-          <rect x="555" y="150" width="80" height="130" />
-
-          <!-- Prudential Tower with rooftop antenna -->
-          <rect x="650" y="55" width="64" height="225" />
-          <rect x="660" y="40" width="44" height="20" />
-          <line x1="682" y1="40" x2="682" y2="5" stroke-width="2" />
-
-          <!-- Cluster between Pru and Hancock -->
-          <rect x="725" y="140" width="56" height="140" />
-          <rect x="785" y="120" width="44" height="160" />
-
-          <!-- 200 Clarendon (Hancock) — tall slab -->
-          <rect x="840" y="30" width="78" height="250" />
-
-          <!-- Financial district mid-rises -->
-          <rect x="930" y="115" width="58" height="165" />
-          <rect x="990" y="145" width="48" height="135" />
-          <rect x="1040" y="100" width="66" height="180" />
-          <rect x="1055" y="80" width="36" height="22" />
-          <rect x="1110" y="135" width="60" height="145" />
-
-          <!-- Brutalist Government Center boxes -->
-          <rect x="1175" y="170" width="74" height="110" />
-          <rect x="1195" y="155" width="34" height="18" />
-
-          <!-- Harbor warehouses -->
-          <rect x="1255" y="195" width="50" height="85" />
-          <rect x="1310" y="210" width="45" height="70" />
-          <rect x="1360" y="220" width="40" height="60" />
-        </g>
-      </svg>
-      <div class="hero-inner">
-        <h1 class="hero-title">Things are changing<br/>rapidly in Boston.</h1>
-        <p class="hero-lede">Large-scale investors are buying up housing, and rent is rising beyond renters' incomes. All the while, evictions are piling up in some neighborhoods more than others.</p>
-        <p class="hero-lede">Let us walk you through what this means.</p>
-        <div class="hero-arrow" aria-hidden="true">↓ Scroll to begin</div>
+      <div class="hero-col text-col">
+        <div class="hero-inner">
+          <h1 class="hero-title">Things are changing<br/>rapidly in Boston.</h1>
+          <p class="hero-lede">Large-scale investors are buying up housing, and rent is rising beyond renters' incomes. All the while, evictions are piling up in some neighborhoods more than others.</p>
+          <p class="hero-lede">Let us walk you through what this means.</p>
+          <div class="hero-arrow" aria-hidden="true">↓ Scroll to begin</div>
+        </div>
+      </div>
+      <div class="hero-col map-col">
+        {#if heroPaths.length}
+          <svg
+            class="hero-map"
+            viewBox="0 0 {HERO_W} {HERO_H}"
+            preserveAspectRatio="xMidYMid meet"
+            aria-hidden="true"
+          >
+            <g class="hero-map-shapes">
+              {#each heroPaths as d}
+                <path {d} />
+              {/each}
+            </g>
+          </svg>
+        {/if}
       </div>
     </div>
   </div>
@@ -677,7 +659,6 @@
         shape of the problem, but they flatten the human story behind each filing.
       </p>
       <p>We'll take you through <strong>6 neighborhoods</strong>, each with a different story. We will use eviction data to show the effect of investor activity on the people who live there.</p>
-      <p>On the maps in the next section, <span class="dot-inline blue"></span> <strong class="blue-strong">dots</strong> represent eviction filings.</p>
       <button class="cta-btn" on:click={() => dispatch('enterDeepDive')}>
         Explore Neighborhoods
       </button>
@@ -953,12 +934,33 @@
   .cta-refs-link:hover { color: #1d4dbf; }
 
   .hero-section {
-    flex-direction: column;
-    max-width: 780px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     gap: 0;
-    padding: 20px 24px;
+    width: 100%;
+    max-width: none;
+    padding: 20px 0;
     position: relative;
     isolation: isolate;
+  }
+  .hero-col {
+    flex: 1 1 50%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+  }
+  /* Pull the text column toward the middle of the screen — anchored to the
+     right edge of the left half rather than centered in it. */
+  .hero-col.text-col {
+    justify-content: flex-end;
+    padding-right: 56px;
+  }
+  .hero-col.map-col {
+    justify-content: flex-start;
+    padding-left: 24px;
   }
   .project-credit {
     position: absolute;
@@ -995,43 +997,45 @@
     .pc-team { font-size: 0.76rem; }
     .pc-members { font-size: 0.62rem; }
   }
-  .hero-skyline {
-    position: absolute;
-    left: 50%;
-    bottom: 44px; /* sits between the lede and the "Scroll to begin" arrow */
-    width: min(1600px, 140vw);
+  .hero-map {
+    width: 100%;
+    max-width: 760px;
     height: auto;
-    transform: translateX(-50%);
-    z-index: -1;
     pointer-events: none;
-    opacity: 0.85;
+    opacity: 0.95;
   }
-  .skyline-shapes rect,
-  .skyline-shapes polygon,
-  .skyline-shapes circle,
-  .skyline-shapes line {
-    fill: none;
-    stroke: #b5b5b5;
-    stroke-width: 1.4;
+  @media (max-width: 900px) {
+    .hero-section { flex-direction: column; gap: 28px; padding: 20px 24px; }
+    .hero-col { flex: 1 1 auto; width: 100%; padding: 0; }
+    .hero-map { max-width: min(520px, 86vw); }
+  }
+  .hero-map-shapes path {
+    fill: #d9d9d9;
+    stroke: #aaa;
+    stroke-width: 0.8;
     stroke-linejoin: round;
-    stroke-linecap: round;
-    animation: skylinePulseStroke 4s ease-in-out infinite alternate;
+    animation: heroMapPulse 6s ease-in-out infinite alternate;
   }
-  @keyframes skylinePulseStroke {
-    0%   { stroke: #b5b5b5; }
-    100% { stroke: #e67e22; }
+  /* Staggered start so the orange wave rolls across the city rather than
+     every neighborhood pulsing in unison. */
+  .hero-map-shapes path:nth-child(3n)   { animation-delay: 0.6s; }
+  .hero-map-shapes path:nth-child(3n+1) { animation-delay: 1.2s; }
+  .hero-map-shapes path:nth-child(5n+2) { animation-delay: 1.8s; }
+  @keyframes heroMapPulse {
+    0%   { fill: #d9d9d9; stroke: #aaa; }
+    100% { fill: #e67e22; stroke: #b86413; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .skyline-shapes rect,
-    .skyline-shapes polygon,
-    .skyline-shapes circle,
-    .skyline-shapes line { animation: none; }
+    .hero-map-shapes path { animation: none; }
   }
   .hero-inner {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 18px;
-    text-align: center;
+    text-align: left;
+    max-width: 480px;
+    width: 100%;
     position: relative;
     z-index: 1;
   }
@@ -1045,25 +1049,19 @@
     align-self: center;
   }
   .hero-title {
-    font-size: 3.2rem;
+    font-size: 2.6rem;
     font-weight: 800;
-    line-height: 1.08;
+    line-height: 1.1;
     letter-spacing: -0.02em;
     color: #1a1a1a;
     margin: 0;
-    text-shadow:
-      0 2px 6px rgba(255, 255, 255, 0.85),
-      0 4px 14px rgba(0, 0, 0, 0.18);
   }
   .hero-lede {
-    font-size: 1.2rem !important;
-    line-height: 1.7 !important;
+    font-size: 1rem !important;
+    line-height: 1.65 !important;
     color: #333 !important;
-    max-width: 640px;
-    margin: 0 auto !important;
-    text-shadow:
-      0 1px 4px rgba(255, 255, 255, 0.9),
-      0 2px 8px rgba(0, 0, 0, 0.12);
+    max-width: 100%;
+    margin: 0 !important;
   }
   .hero-accent {
     color: #c0392b !important;
@@ -1073,6 +1071,11 @@
     font-size: 0.85rem;
     color: #888;
     letter-spacing: 0.05em;
+  }
+  /* The hero's "Scroll to begin" arrow flows directly under the lede,
+     with a little extra breathing room so it reads as a clear prompt. */
+  .hero-inner > .hero-arrow {
+    margin-top: 28px;
   }
   @media (max-width: 900px) {
     .hero-title { font-size: 2.1rem; }

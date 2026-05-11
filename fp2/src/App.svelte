@@ -39,6 +39,7 @@
   let neighborhoodCounts = {};
   let mapSelectedDots = [];
   let mapResetViewSignal = 0;
+  let mapUserDotScale = 1;
 
   // ── Show map only in deepdive and explore phases ───────────────────────
   $: showMap = phase !== 'story';
@@ -198,6 +199,7 @@
           bind:selectedDots={mapSelectedDots}
           bind:selectedNeighborhood={clickedNeighborhood}
           bind:affordableByNeighborhood={neighborhoodCounts}
+          bind:userDotScale={mapUserDotScale}
         />
       </div>
 
@@ -232,6 +234,7 @@
           bind:mapZoomProgress
           selectedDots={mapSelectedDots}
           bind:resetViewSignal={mapResetViewSignal}
+          userDotScale={mapUserDotScale}
           on:back={backToStory}
           on:backToDeepDive={enterDeepDive}
           {openReferences}

@@ -104,6 +104,10 @@
         neighborhoods on the upper right, and use the <strong>My Budget</strong>
         slider to put in your desired rental budget.
       </p>
+      <p class="intro-body intro-dot-hint">
+        On the maps that follow, <span class="intro-dot blue"></span>
+        <strong>dots</strong> represent eviction filings.
+      </p>
       <p class="intro-caveat">
         <strong>Note:</strong> Per-unit rents we'll show later are
         <em>estimates</em>, not pulled from actual leases — they're
@@ -422,6 +426,17 @@
     margin: 0 0 16px;
   }
   .intro-body strong { color: #1a1a1a; font-weight: 700; }
+  .intro-dot-hint { margin-top: -6px; }
+  .intro-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin: 0 2px 1px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+  }
+  .intro-dot.blue { background: #2563eb; }
   .intro-caveat {
     margin: 0 0 16px;
     padding: 9px 12px;

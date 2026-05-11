@@ -33,6 +33,9 @@
 
   // Reset signal sent to NeighborhoodMap to clear user pan/zoom
   export let resetViewSignal = 0;
+  // Scale factor for the dot-size legend so it tracks on-screen dot growth
+  // as the user zooms in.
+  export let userDotScale = 1;
 
   // Dropdown state (pending selection)
   let pendingNeighborhood = '';
@@ -110,15 +113,15 @@
   <div class="legend-subtitle">Dot size = cases at location</div>
   <div class="size-row">
     <div class="size-cell">
-      <span class="size-swatch" style="width:6px;height:6px;"></span>
+      <span class="size-swatch" style="width:{4 * userDotScale}px;height:{4 * userDotScale}px;"></span>
       <span class="size-lbl">1</span>
     </div>
     <div class="size-cell">
-      <span class="size-swatch" style="width:10px;height:10px;"></span>
+      <span class="size-swatch" style="width:{7 * userDotScale}px;height:{7 * userDotScale}px;"></span>
       <span class="size-lbl">few</span>
     </div>
     <div class="size-cell">
-      <span class="size-swatch" style="width:16px;height:16px;"></span>
+      <span class="size-swatch" style="width:{11 * userDotScale}px;height:{11 * userDotScale}px;"></span>
       <span class="size-lbl">many</span>
     </div>
   </div>
@@ -491,6 +494,7 @@
     border: 1px solid rgba(0,0,0,0.25);
     border-radius: 50%;
     flex-shrink: 0;
+    transition: width 0.12s ease-out, height 0.12s ease-out;
   }
   .size-lbl {
     font-size: 0.66rem;
