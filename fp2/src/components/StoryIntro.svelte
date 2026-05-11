@@ -363,7 +363,7 @@
         <div class="story-text corp-intro">
           <h1>Boston's Corporate Takeover</h1>
           <p>
-            From 2004 to 2024, Corporate ownership has risen 5x, from <strong style="color:#e67e22;">5%</strong> to <strong style="color:#e67e22;">25%</strong>. Meanwhile, owner-occupancy has declined from <strong style="color:#2563eb;"> 43%</strong> to <strong style="color:#2563eb;">38%</strong>.
+            From 2004 to 2024, Corporate ownership has risen 5x, from <strong style="color:#e67e22;">5%</strong> to <strong style="color:#e67e22;">25%</strong>.<br>Meanwhile, owner-occupancy has declined from <strong style="color:#2563eb;"> 43%</strong> to <strong style="color:#2563eb;">38%</strong>.
           </p>
           <p class="detail">
             <strong style="color:#888;">Why is this concerning?</strong> Corporate owners prioritize the maximization of profit: This is best accomplished by favoring short-term leases over long-term tenants.
@@ -593,7 +593,7 @@
             Out of over 6,000 eviction filings filed in Boston between 2020 and 2024, the most common reason is simple: tenants <em>missed rent</em>.
           </p>
           <p class="detail">
-            As corporate landlords consolidate and rents climb, more tenants fall short on the first of the month.
+            Tenants may miss rent for a variety of personal reasons -- but as corporate landlords consolidate and rents climb, more tenants fall short on rent.
           </p>
           <p><br>Who files these evictions?</p>
           <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
@@ -634,7 +634,7 @@
             </span>
           </div>
           <p class="detail">
-            Notice the FTOR <strong>shrinks year over year</strong>, even though corporate landlords still file roughly <strong>seven in ten evictions</strong>. The numerator (filings share) stays nearly constant, while the denominator (ownership share) keeps climbing — so the same outsized filing rate gets divided across a bigger ownership base, and the ratio falls.
+            For each year of available data, corporate landlords consistently file roughly <strong style="color:#e67e22;">seven in ten evictions</strong>. The same proportion of filing rate is divided across a larger ownership base, as the filings share (numerator) stays nearly constant while the ownership share (denominator) continues climbing.
           </p>
         </div>
         <OwnershipVsFilings
@@ -651,14 +651,9 @@
     <div class="story-section cta-section" class:active={scrollStep === 7}>
       <h1>Let's Look Closer.</h1>
       <p class="cta-recap">
-        So far we've watched <strong style="color:#e67e22;">corporate ownership</strong>
-        climb fivefold, sales flow steadily from individuals into corporate hands,
-        rents outrun the incomes of the renters living in them, and eviction filings
-        pile up — overwhelmingly from <strong style="color:#e67e22;">corporate landlords</strong>
-        filing far above their share of the market. Citywide numbers tell the
-        shape of the problem, but they flatten the human story behind each filing.
+        So far we've watched corporate ownership <strong style="color:#e67e22;">climb five-fold</strong>, properties flow steadily <strong style="color:#e67e22;">from individual to corporate hands</strong>, rents <strong style="color:#e67e22;">outrun the incomes of the renters</strong>, and corporate landlords <strong style="color:#e67e22;">filing evictions disproportionately above their share of the market</strong>. These are citywide numbers that tell the shape of the problem, but they flatten the human story behind each filing.
       </p>
-      <p>We'll take you through <strong>6 neighborhoods</strong>, each with a different story. We will use eviction data to show the effect of investor activity on the people who live there.</p>
+      <p>We'll take you through <strong>six neighborhoods</strong>, each with a different story. For each of these neighborhoods, eviction data reveals the effect of investor activity on the people who live there.</p>
       <button class="cta-btn" on:click={() => dispatch('enterDeepDive')}>
         Explore Neighborhoods
       </button>
@@ -1014,7 +1009,7 @@
     stroke: #aaa;
     stroke-width: 0.8;
     stroke-linejoin: round;
-    animation: heroMapPulse 6s ease-in-out infinite alternate;
+    animation: heroMapPulse 2s ease-in-out infinite alternate;
   }
   /* Staggered start so the orange wave rolls across the city rather than
      every neighborhood pulsing in unison. */
