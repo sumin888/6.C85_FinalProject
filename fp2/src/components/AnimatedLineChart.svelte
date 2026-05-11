@@ -12,7 +12,7 @@
   export let xFormat = v => v;
 
   let svgEl;
-  const margin = { top: 16, right: 156, bottom: 36, left: 56 };
+  const margin = { top: 16, right: 156, bottom: 36, left: 68 };
 
   function draw() {
     if (!svgEl || lines.length === 0) return;
@@ -50,7 +50,7 @@
         .attr('fill', '#999').attr('font-size', '11px').text(xLabel);
     }
     if (yLabel) {
-      g.append('text').attr('transform', 'rotate(-90)').attr('x', -h / 2).attr('y', -44)
+      g.append('text').attr('transform', 'rotate(-90)').attr('x', -h / 2).attr('y', -54)
         .attr('text-anchor', 'middle').attr('fill', '#999').attr('font-size', '11px').text(yLabel);
     }
 
