@@ -489,7 +489,7 @@
               <strong style="color:#16a085;">Dorchester</strong> lead the
               list.
             </p>
-            <p><br>How much do renters in these same neighborhoods earn?</p>
+            <p style="color:#888;"><br>How much do renters in these same neighborhoods earn?</p>
             <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
             
           {:else}
@@ -590,12 +590,12 @@
         <div class="story-text">
           <h1>When Rent Outruns Income</h1>
           <p>
-            Out of over 6,000 eviction filings filed in Boston between 2020 and 2024, the most common reason is simple: tenants <em>missed rent</em>.
+            Out of over 6,000 eviction filings filed in Boston between 2020 and 2024, the most common listed reason is <em>missed rent</em>.
           </p>
           <p class="detail">
             Tenants may miss rent for a variety of personal reasons -- but as corporate landlords consolidate and rents climb, more tenants fall short on rent.
           </p>
-          <p><br>Who files these evictions?</p>
+          <p style="color:#888;"><br>Who files these evictions?</p>
           <div class="hero-arrow" aria-hidden="true">↓ Scroll on</div>
         </div>
         {#if evictionCauseSlices}
@@ -836,7 +836,7 @@
   .corp-prompt {
     margin: 0;
     font-size: 1.05rem;
-    color: #444;
+    color: #888;
     text-align: left;
   }
   .corp-arrow {
@@ -1062,7 +1062,6 @@
     color: #c0392b !important;
   }
   .hero-arrow {
-    margin-top: 10px;
     font-size: 0.85rem;
     color: #888;
     letter-spacing: 0.05em;
