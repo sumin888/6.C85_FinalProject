@@ -97,12 +97,12 @@
   ] : [];
 
   // Drive map state from scroll step
-  // 0=neighborhood history, 1=today's numbers + budget tip, 2=general eviction,
-  // 3=corp ownership+filing, 4=rent above market, 5=what's left
+  // 0=neighborhood overview, 1=general eviction (all green), 2=corp ownership+filing (red),
+  // 3=rent above market, 4=what's left
   $: {
     mapMaxYear = 2022;
-    mapUseCurrentRent = scrollStep >= 4;
-    mapHighlightInvestors = scrollStep >= 3;  // turn dots orange (corp) at step 3
+    mapUseCurrentRent = scrollStep >= 3;
+    mapHighlightInvestors = scrollStep >= 2;  // turn dots orange (corp) at step 2
     mapHighlightEvictions = false;
   }
 
@@ -150,19 +150,10 @@
 </script>
 
 <div class="story-panel" bind:this={panelEl}>
-  <!-- Step 0: Neighborhood history / overview -->
+  <!-- Step 0: Neighborhood overview + today's numbers -->
   <div class="story-step" data-step="0">
     <div class="story-card" class:active={scrollStep === 0}>
       <h3>{neighborhood}</h3>
-      <p>{@html story.overview ?? ''}</p>
-      <div class="scroll-hint">Keep scrolling ↓</div>
-    </div>
-  </div>
-
-  <!-- Step 1: Today's numbers + budget slider prompt -->
-  <div class="story-step" data-step="1">
-    <div class="story-card" class:active={scrollStep === 1}>
-      <h3>{neighborhood} Today</h3>
       <div class="overview-meta plain">
         {#if sp.median_rent}
           <div class="meta-item">
@@ -177,24 +168,14 @@
           </div>
         {/if}
       </div>
-      <div class="budget-tip">
-        <span class="budget-tip-icon">↑</span>
-        <span>
-          <strong>Try the budget slider above</strong> to see how affordability
-          shifts in {neighborhood} as you change what you can pay each month.
-        </span>
-      </div>
-      <p class="estimate-caveat">
-        <strong>Note:</strong> Per-unit rents we'll show later are <em>estimates</em>,
-        not pulled from actual leases — they're interpolated using <strong>ZORI</strong>,
-        Zillow's Observed Rent Index, which tracks market rent over time.
-      </p>
+      <p>{@html story.overview ?? ''}</p>
+      <div class="scroll-hint">Keep scrolling ↓</div>
     </div>
   </div>
 
-  <!-- Step 2: General eviction — headline stats + cause breakdown -->
-  <div class="story-step" data-step="2">
-    <div class="story-card" class:active={scrollStep === 2}>
+  <!-- Step 1: General eviction — headline stats + cause breakdown -->
+  <div class="story-step" data-step="1">
+    <div class="story-card" class:active={scrollStep === 1}>
       <h3>Eviction in {neighborhood}</h3>
       <p class="step-narrative">
         Every dot on the map you're looking at is a real eviction case
@@ -224,9 +205,9 @@
     </div>
   </div>
 
-  <!-- Step 3: Corporate ownership → corporate filings -->
-  <div class="story-step" data-step="3">
-    <div class="story-card" class:active={scrollStep === 3}>
+  <!-- Step 2: Corporate ownership → corporate filings -->
+  <div class="story-step" data-step="2">
+    <div class="story-card" class:active={scrollStep === 2}>
       <h3>Who's Filing These?</h3>
       <p class="lede">
         Dots now <span class="inline-dot orange"></span> <strong class="orange-txt">orange</strong>
@@ -283,9 +264,9 @@
     </div>
   </div>
 
-  <!-- Step 4: Rent rising above the market — driven by corporate owners -->
-  <div class="story-step" data-step="4">
-    <div class="story-card" class:active={scrollStep === 4}>
+  <!-- Step 3: Rent rising above the market — driven by corporate owners -->
+  <div class="story-step" data-step="3">
+    <div class="story-card" class:active={scrollStep === 3}>
       <h3>The Rent Behind the Filings</h3>
       <p class="step-narrative">
         Eviction filings rarely come out of nowhere — they follow rent.
@@ -338,9 +319,9 @@
     </div>
   </div>
 
-  <!-- Step 5: What's left — affordability at the user's budget -->
-  <div class="story-step" data-step="5">
-    <div class="story-card" class:active={scrollStep === 5}>
+  <!-- Step 4: What's left — affordability at the user's budget -->
+  <div class="story-step" data-step="4">
+    <div class="story-card" class:active={scrollStep === 4}>
       <h3>What's Left in {neighborhood}?</h3>
       <p class="step-narrative">
         Slide the rent slider at the top again and watch the numbers shift —
